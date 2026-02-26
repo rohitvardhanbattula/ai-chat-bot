@@ -38,7 +38,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder }: ChatInputProps
             Multi-Model Code Generation
           </h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Send your prompt to Gemini, Claude, GPT-4o, and Azure Copilot simultaneously. Compare responses and choose the best one.
+            Send your prompt to Gemini, Claude, GPT-4o. Compare responses and choose the best one.
           </p>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { ModelId, ModelResponse } from "@/types/chat";
 
-// We use an environment variable for the API URL, falling back to the default local CAP port
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4004/odata/v4/ai";
+
+const API_BASE_URL = "/odata/v4/ai";
 
 export async function generateMultiModelResponse(
   prompt: string
