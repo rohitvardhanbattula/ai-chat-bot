@@ -33,12 +33,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder }: ChatInputProps
     <div className={minimal ? "" : "flex flex-col items-center gap-8 w-full max-w-3xl mx-auto"}>
       {!minimal && (
         <div className="text-center animate-slide-up">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
-            <span className="text-xs font-mono text-muted-foreground tracking-widest uppercase">
-              Enterprise AI Gateway
-            </span>
-          </div>
+          
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Multi-Model Code Generation
           </h1>
