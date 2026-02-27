@@ -1,0 +1,60 @@
+_schema-version: "3.2"
+ID: ai-chatbot-ui
+version: 1.0.0
+description: "AI ChatBot React Application"
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npm run build
+
+modules:
+  - name: ai-chatbot-approuter
+    type: approuter.nodejs
+    path: approuter
+    parameters:
+      disk-quota: 512M
+      memory: 512M
+    requires:
+      - name: ai-chatbot-destination
+      - name: ai-chatbot-uaa
+    build-parameters:
+      builder: npm
+      ignore:
+        - default-*.json
+        - .gitignore
+        - package-lock.json
+
+  - name: ai-chatbot-ui
+    type: html5
+    path: .
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+        - mkdir -p approuter/webapp
+        - cp -r dist/. approuter/webapp/
+      supported-platforms: []
+      build-result: dist
+
+resources:
+  - name: ai-chatbot-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+
+  - name: ai-chatbot-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: ai-chatbot-ui
+        tenant-mode: dedicated   

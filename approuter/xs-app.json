@@ -1,0 +1,18 @@
+{
+  "authenticationMethod": "route",
+  "routes": [
+    {
+      "source": "^/?odata/(.*)$",
+      "target": "/odata/$1",
+      "destination": "AiChatDestination",
+      "csrfProtection": false,
+      "authenticationType": "none"
+    },
+    {
+      "source": "^/(.*)$",
+      "target": "$1",
+      "localDir": "webapp",
+      "authenticationType": "none"
+    }
+  ]
+}
