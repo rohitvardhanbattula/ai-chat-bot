@@ -1,65 +1,72 @@
-import { ModelId, ModelResponse } from "@/types/chat";
-
+import { ModelId, ModelResponse, ChatSession } from "@/types/chat";
 
 const API_BASE_URL = "/odata/v4/ai";
 
-export async function generateMultiModelResponse(
-  prompt: string
-): Promise<ModelResponse[]> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/generateMultiModelResponse`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      // CAP OData actions expect parameters in the body
-      body: JSON.stringify({ prompt }),
-    });
+export async function generateMultiModelResponse(prompt: string): Promise<ModelResponse[]> {
+  const response = await fetch(`${API_BASE_URL}/generateMultiModelResponse`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prompt }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Backend Error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    // OData V4 typically wraps action results in a 'value' property
-    return data.value || data; 
-  } catch (error) {
-    console.error("Failed to fetch multi-model responses from backend:", error);
-    // Return empty array or throw error depending on how you want the UI to handle failures
-    throw error; 
-  }
+  if (!response.ok) throw new Error("Failed to fetch multi-model responses");
+  const data = await response.json();
+  return data.value || data;
 }
 
-export async function sendChatMessage(
-  modelId: ModelId,
-  prompt: string,
-  history: { role: string; content: string }[]
-): Promise<string> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/sendChatMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        modelId,
-        prompt,
-        history,
-      }),
-    });
+export async function fetchSessions(): Promise<ChatSession[]> {
+  const response = await fetch(`${API_BASE_URL}/ChatSessions?$expand=messages($orderby=createdAt asc)&$orderby=createdAt desc`);
+  if (!response.ok) throw new Error("Failed to fetch sessions");
+  const data = await response.json();
+  return data.value;
+}
 
-    if (!response.ok) {
-      throw new Error(`Backend Error: ${response.status} ${response.statusText}`);
-    }
+export async function createSession(title: string, selectedModel: string, messages: any[]): Promise<ChatSession> {
+  const response = await fetch(`${API_BASE_URL}/ChatSessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title, selectedModel, messages }),
+  });
+  if (!response.ok) throw new Error("Failed to create session");
+  return await response.json();
+}
 
-    const data = await response.json();
-    
-    // Extract the string response. Checking 'value' for standard OData V4 wrapper, 
-    // or 'content' depending on how we structure the CAP return object later.
-    return data.value || data.content || data;
-  } catch (error) {
-    console.error(`Failed to send chat message to ${modelId}:`, error);
-    throw error;
-  }
+export async function deleteSession(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/ChatSessions/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete session");
+}
+
+export async function renameSession(id: string, title: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/ChatSessions/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+  if (!response.ok) throw new Error("Failed to rename session");
+}
+
+export async function sendChatMessage(sessionId: string, modelId: ModelId, prompt: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/sendChatMessage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sessionId,
+      modelId,
+      prompt,
+    }),
+  });
+
+  if (!response.ok) throw new Error("Failed to send chat message");
+  const data = await response.json();
+  return data.value || data.content || data;
 }

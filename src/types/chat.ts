@@ -47,17 +47,19 @@ export interface ModelResponse {
 }
 
 export interface ChatMessage {
+  ID?: string;
   role: "user" | "assistant";
   content: string;
   modelId?: ModelId;
-  timestamp: Date;
+  createdAt?: string;
 }
 
 export interface ChatSession {
-  id: string;
-  selectedModel: ModelId | null;
+  ID: string;
+  title: string;
+  selectedModel: ModelId;
   messages: ChatMessage[];
-  createdAt: Date;
+  createdAt?: string;
 }
 
 export type AppState = "input" | "comparison" | "active-chat";
