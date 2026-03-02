@@ -1,4 +1,4 @@
-import { ModelId, ModelResponse, ChatSession } from "@/types/chat";
+import { ModelId, ModelResponse, ChatSession, ChatMessage } from "@/types/chat";
 
 const API_BASE_URL = "/odata/v4/ai";
 
@@ -17,8 +17,19 @@ export async function generateMultiModelResponse(prompt: string): Promise<ModelR
 }
 
 export async function fetchSessions(): Promise<ChatSession[]> {
-  const response = await fetch(`${API_BASE_URL}/ChatSessions?$expand=messages($orderby=createdAt asc)&$orderby=createdAt desc`);
+  // Removed $expand=messages to only fetch lightweight metadata
+  const response = await fetch(`${API_BASE_URL}/ChatSessions?$orderby=createdAt desc`);
   if (!response.ok) throw new Error("Failed to fetch sessions");
+  const data = await response.json();
+  
+  // Initialize messages as an empty array so UI doesn't crash before loading
+  return data.value.map((session: any) => ({ ...session, messages: [] }));
+}
+
+// New function to lazy-load messages for a specific session
+export async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const response = await fetch(`${API_BASE_URL}/ChatSessions/${sessionId}/messages?$orderby=createdAt asc`);
+  if (!response.ok) throw new Error("Failed to fetch session messages");
   const data = await response.json();
   return data.value;
 }

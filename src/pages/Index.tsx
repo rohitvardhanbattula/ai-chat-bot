@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppState, ChatMessage, ModelId, ModelResponse, ChatSession } from "@/types/chat";
-import { generateMultiModelResponse, sendChatMessage, fetchSessions, createSession, deleteSession, renameSession } from "@/lib/api";
+import { generateMultiModelResponse, sendChatMessage, fetchSessions, createSession, deleteSession, renameSession, fetchSessionMessages } from "@/lib/api";
 import ChatInput from "@/components/ChatInput";
 import ComparisonGrid from "@/components/ComparisonGrid";
 import ActiveChat from "@/components/ActiveChat";
@@ -37,9 +37,25 @@ const Index = () => {
     setResponses([]);
   };
 
-  const handleSelectSession = (sessionId: string) => {
+  const handleSelectSession = async (sessionId: string) => {
     setActiveSessionId(sessionId);
     setAppState("active-chat");
+
+    const session = sessions.find((s) => s.ID === sessionId);
+    
+    if (session && session.messages.length === 0) {
+      setIsLoading(true);
+      try {
+        const messages = await fetchSessionMessages(sessionId);
+        setSessions((prev) => 
+          prev.map((s) => (s.ID === sessionId ? { ...s, messages } : s))
+        );
+      } catch (error) {
+        console.error("Failed to fetch messages for session:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
