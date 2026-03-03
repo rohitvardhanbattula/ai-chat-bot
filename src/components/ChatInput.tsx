@@ -38,7 +38,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder }: ChatInputProps
             Multi-Model Code Generation
           </h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Send your prompt to Gemini, Claude, GPT-4o. Compare responses and choose the best one.
+            Send your prompt to Gemini, Claude, GPT-4o, Perplexity. Compare responses and choose the best one.
           </p>
         </div>
       )}
@@ -69,7 +69,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder }: ChatInputProps
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-30 hover:opacity-90 transition-all glow-primary disabled:shadow-none"
             >
               <Send className="w-4 h-4" />
-              {isLoading ? "Generating..." : minimal ? "Send" : "Send to 3 Models"}
+              {isLoading ? "Generating..." : minimal ? "Send" : "Send"}
             </button>
           </div>
         </div>

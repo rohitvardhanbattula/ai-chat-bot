@@ -1,7 +1,7 @@
 import { ModelId, ModelResponse } from "@/types/chat";
 import ModelCard from "./ModelCard";
 
-const MODEL_ORDER: ModelId[] = ["gemini", "claude", "gpt4o"];
+const MODEL_ORDER: ModelId[] = ["gemini", "claude", "gpt4o", "perplexity"];
 
 interface ComparisonGridProps {
   responses: ModelResponse[];

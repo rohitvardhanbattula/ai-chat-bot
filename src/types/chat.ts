@@ -1,4 +1,4 @@
-export type ModelId = "gemini" | "claude" | "gpt4o" | "azure";
+export type ModelId = "gemini" | "claude" | "gpt4o" | "perplexity";
 
 export interface ModelInfo {
   id: ModelId;
@@ -30,10 +30,10 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     colorClass: "text-model-gpt",
     borderClass: "model-card-gpt",
   },
-  azure: {
-    id: "azure",
-    name: "Azure Copilot",
-    provider: "Microsoft",
+  perplexity: {
+    id: "perplexity",
+    name: "Sonar",
+    provider: "Perplexity",
     colorClass: "text-model-azure",
     borderClass: "model-card-azure",
   },
