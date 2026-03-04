@@ -1,84 +1,67 @@
-import { Check, Clock, Copy, MessageSquare } from "lucide-react";
-import { ModelId, ModelResponse, MODELS } from "@/types/chat";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import MarkdownRenderer from "./MarkdownRenderer";
-import { useState } from "react";
+// Assuming MODELS is exported from your chat types based on your ActiveChat component
+import { MODELS } from "@/types/chat"; 
 
-interface ModelCardProps {
-  response?: ModelResponse;
-  isLoading: boolean;
-  onAccept: (modelId: ModelId) => void;
-  modelId: ModelId;
-}
+const ModelCard = ({ modelId, response, isLoading, onAccept }: any) => {
+    // Check if the current card is Claude to disable it
+    const isClaude = modelId.toLowerCase() === 'claude';
+    
+    // Fallback name if MODELS isn't perfectly mapped
+    const modelName = MODELS && MODELS[modelId] ? MODELS[modelId].name : modelId.toUpperCase();
 
-const ModelCard = ({ response, isLoading, onAccept, modelId }: ModelCardProps) => {
-  const model = MODELS[modelId];
-  const [copied, setCopied] = useState(false);
+    return (
+        <Card className={`flex flex-col h-[400px] ${isClaude ? 'opacity-50 pointer-events-none grayscale' : 'hover:border-primary/50 transition-colors'}`}>
+            <CardHeader className="pb-2 shrink-0 border-b">
+                <CardTitle className="flex justify-between items-center text-lg">
+                    <div className="flex items-center gap-2">
+                        {modelName}
+                    </div>
+                    {isClaude ? (
+                        <Badge variant="secondary" className="text-xs bg-gray-200 text-gray-600">Build in progress</Badge>
+                    ) : response?.latency ? (
+                        <Badge variant="outline" className="text-xs text-muted-foreground font-normal">
+                            {response.latency}ms
+                        </Badge>
+                    ) : null}
+                </CardTitle>
+            </CardHeader>
+            
+            <CardContent className="flex-1 overflow-y-auto p-4 bg-muted/10">
+                {isLoading ? (
+                    <div className="flex items-center gap-1 text-muted-foreground italic h-full justify-center">
+                        <div className="w-2 h-2 rounded-full bg-primary/50 animate-pulse" />
+                        <div className="w-2 h-2 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: "0.2s" }} />
+                        <div className="w-2 h-2 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: "0.4s" }} />
+                        <span className="ml-2 text-sm font-medium">Thinking...</span>
+                    </div>
+                ) : response ? (
+                    response.error ? (
+                        <p className="text-sm font-medium text-destructive mt-2">{response.error}</p>
+                    ) : (
+                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                            <MarkdownRenderer content={response.content} />
+                        </div>
+                    )
+                ) : (
+                    <p className="text-sm text-muted-foreground mt-2">Waiting for input...</p>
+                )}
+            </CardContent>
 
-  const handleCopy = async () => {
-    if (!response) return;
-    await navigator.clipboard.writeText(response.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div
-      className={`flex flex-col rounded-xl border-t-2 border border-border bg-card overflow-hidden transition-all ${model.borderClass} ${
-        isLoading ? "animate-pulse" : "animate-slide-up"
-      }`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isLoading ? "bg-muted-foreground animate-pulse-glow" : "bg-accent"}`} />
-          <span className={`font-semibold text-sm ${model.colorClass}`}>{model.name}</span>
-          <span className="text-xs text-muted-foreground">/ {model.provider}</span>
-        </div>
-        {response && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            {(response.latency / 1000).toFixed(1)}s
-          </div>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-auto px-4 py-3 max-h-[400px] scrollbar-thin">
-        {isLoading ? (
-          <div className="space-y-3">
-            <div className="h-4 bg-secondary rounded w-3/4" />
-            <div className="h-4 bg-secondary rounded w-1/2" />
-            <div className="h-24 bg-secondary rounded" />
-            <div className="h-4 bg-secondary rounded w-2/3" />
-          </div>
-        ) : response?.error ? (
-          <p className="text-destructive text-sm">{response.error}</p>
-        ) : response ? (
-          <MarkdownRenderer content={response.content} />
-        ) : null}
-      </div>
-
-      {/* Footer */}
-      {!isLoading && response && (
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-border">
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-secondary text-secondary-foreground hover:bg-surface-hover transition-colors"
-          >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? "Copied" : "Copy All"}
-          </button>
-          <button
-            onClick={() => onAccept(modelId)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-colors ml-auto glow-primary"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            Accept & Continue
-          </button>
-        </div>
-      )}
-    </div>
-  );
+            <CardFooter className="shrink-0 p-4 border-t bg-card">
+                <Button 
+                    className="w-full" 
+                    variant={response && !response.error ? "default" : "secondary"}
+                    disabled={!response || !!response.error || isClaude || isLoading} 
+                    onClick={() => onAccept(modelId)}
+                >
+                    {isClaude ? 'Unavailable' : 'Accept & Continue'}
+                </Button>
+            </CardFooter>
+        </Card>
+    );
 };
 
 export default ModelCard;

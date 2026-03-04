@@ -33,11 +33,8 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder }: ChatInputProps
     <div className={minimal ? "w-full" : "flex flex-col items-center gap-8 w-full max-w-3xl mx-auto"}>
       {!minimal && (
         <div className="text-center animate-slide-up w-full flex flex-col items-center">
-          <div className="inline-flex items-center justify-center p-3 bg-muted rounded-lg mb-4">
-            <Database className="w-6 h-6 text-primary" />
-          </div>
           <h1 className="text-2xl font-semibold text-foreground mb-2">
-            Multi-Model Code Generation
+            Code Generation
           </h1>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
             Input your requirements. Our gateway evaluates responses across optimal LLMs to ensure code quality and accuracy.

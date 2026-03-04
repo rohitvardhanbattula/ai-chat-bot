@@ -1,83 +1,81 @@
-import { ModelId, ModelResponse, ChatSession, ChatMessage } from "@/types/chat";
+const BASE_URL = '';
+const getUserId = () => localStorage.getItem('userId');
 
-const API_BASE_URL = "/odata/v4/ai";
+export const authUser = async (action: 'login' | 'register', payload: any) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || "Authentication failed");
+    return data.value;
+};
 
-export async function generateMultiModelResponse(prompt: string): Promise<ModelResponse[]> {
-  const response = await fetch(`${API_BASE_URL}/generateMultiModelResponse`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ prompt }),
-  });
+export const fetchSessions = async () => {
+    const userId = getUserId();
+    if (!userId) return [];
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions?$filter=userId eq '${userId}'&$orderby=createdAt desc`);
+    const data = await res.json();
+    return data.value || [];
+};
 
-  if (!response.ok) throw new Error("Failed to fetch multi-model responses");
-  const data = await response.json();
-  return data.value || data;
-}
+export const fetchSessionMessages = async (sessionId: string) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatMessages?$filter=session_ID eq '${sessionId}'`);
+    const data = await res.json();
+    const messages = data.value || [];
+    // Sort strictly to fix the zig-zag issue
+    return messages.sort((a: any, b: any) => {
+        const timeDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        if (a.role === 'user' && b.role === 'assistant') return -1;
+        if (a.role === 'assistant' && b.role === 'user') return 1;
+        return 0;
+    });
+};
 
-export async function fetchSessions(): Promise<ChatSession[]> {
-  // Removed $expand=messages to only fetch lightweight metadata
-  const response = await fetch(`${API_BASE_URL}/ChatSessions?$orderby=createdAt desc`);
-  if (!response.ok) throw new Error("Failed to fetch sessions");
-  const data = await response.json();
-  
-  // Initialize messages as an empty array so UI doesn't crash before loading
-  return data.value.map((session: any) => ({ ...session, messages: [] }));
-}
+export const createSession = async (title: string, selectedModel: string, initialMessages: any[]) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: getUserId(), title, selectedModel, messages: initialMessages }) });
+    return res.json();
+};
 
-// New function to lazy-load messages for a specific session
-export async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-  const response = await fetch(`${API_BASE_URL}/ChatSessions/${sessionId}/messages?$orderby=createdAt asc`);
-  if (!response.ok) throw new Error("Failed to fetch session messages");
-  const data = await response.json();
-  return data.value;
-}
+export const deleteSession = async (sessionId: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { method: 'DELETE' });
+export const renameSession = async (sessionId: string, title: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
 
-export async function createSession(title: string, selectedModel: string, messages: any[]): Promise<ChatSession> {
-  const response = await fetch(`${API_BASE_URL}/ChatSessions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ title, selectedModel, messages }),
-  });
-  if (!response.ok) throw new Error("Failed to create session");
-  return await response.json();
-}
+export const generateMultiModelResponse = async (prompt: string) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/generateMultiModelResponse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+    const data = await res.json();
+    return data.value || [];
+};
 
-export async function deleteSession(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/ChatSessions/${id}`, {
-    method: "DELETE",
-  });
-  if (!response.ok) throw new Error("Failed to delete session");
-}
+export const submitRating = async (userId: string, modelId: string, category: string, rating: number) => {
+    return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, modelId, category, rating }) });
+};
 
-export async function renameSession(id: string, title: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/ChatSessions/${id}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ title }),
-  });
-  if (!response.ok) throw new Error("Failed to rename session");
-}
+// UPDATED: SSE Consumer
+export const streamChatMessage = async (
+  sessionId: string, modelId: string, prompt: string, 
+  onUpdate: (status: 'thinking' | 'chunk' | 'done' | 'error', content?: string) => void
+) => {
+    try {
+        const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, modelId, prompt }) });
+        if (!response.body) throw new Error("ReadableStream not supported");
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
 
-export async function sendChatMessage(sessionId: string, modelId: ModelId, prompt: string): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/sendChatMessage`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sessionId,
-      modelId,
-      prompt,
-    }),
-  });
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-  if (!response.ok) throw new Error("Failed to send chat message");
-  const data = await response.json();
-  return data.value || data.content || data;
-}
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n\n').filter(Boolean);
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.replace('data: ', ''));
+                    if (data.status === 'thinking') onUpdate('thinking');
+                    else if (data.status === 'chunk') onUpdate('chunk', data.content); // Handles text chunks
+                    else if (data.status === 'done') onUpdate('done');
+                    else if (data.status === 'error') onUpdate('error', data.message);
+                }
+            }
+        }
+    } catch (error) { onUpdate('error', 'Connection failed.'); }
+};

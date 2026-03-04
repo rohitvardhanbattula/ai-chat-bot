@@ -1,8 +1,9 @@
-import { useRef, useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import { ArrowLeft, Star } from "lucide-react";
 import { ChatMessage, ModelId, MODELS } from "@/types/chat";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ChatInput from "./ChatInput";
+import RatingPopup from "./RatingPopup";
 
 interface ActiveChatProps {
   modelId: ModelId;
@@ -15,41 +16,37 @@ interface ActiveChatProps {
 const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: ActiveChatProps) => {
   const model = MODELS[modelId];
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [ratingModal, setRatingModal] = useState({ isOpen: false, modelId: '' });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isLoading]);
+
+  // Helper to safely format dates and prevent crashes
+  const formatTime = (dateStr?: string | Date) => {
+    if (!dateStr) return '';
+    try {
+        return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        return '';
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto w-full bg-card border-x border-border shadow-sm">
-      {/* Header */}
+    <div className="flex flex-col h-full max-w-5xl mx-auto w-full bg-card border-x border-border shadow-sm relative">
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border bg-card mb-2">
-        <button
-          onClick={onBack}
-          className="p-1.5 rounded hover:bg-muted transition-colors border border-transparent hover:border-border"
-        >
+        <button onClick={onBack} className="p-1.5 rounded hover:bg-muted transition-colors border border-transparent hover:border-border">
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </button>
         <div className="h-4 w-[1px] bg-border" />
         <div className="w-2 h-2 rounded-full bg-primary" />
         <span className="font-semibold text-sm text-foreground">{model?.name || "AI Assistant"}</span>
-        <span className="text-xs text-muted-foreground">| Active Session</span>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-auto px-6 py-4 space-y-6">
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-md px-5 py-4 shadow-sm ${
-                msg.role === "user"
-                  ? "bg-primary/10 border border-primary/20 text-foreground"
-                  : "bg-muted border border-border text-foreground"
-              }`}
-            >
+          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[80%] rounded-md px-5 py-4 shadow-sm ${msg.role === "user" ? "bg-primary/10 border border-primary/20 text-foreground" : "bg-muted border border-border text-foreground"}`}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {msg.role === "user" ? "You" : model?.name || "Assistant"}
@@ -62,9 +59,20 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
               ) : (
                 <p className="text-sm leading-relaxed">{msg.content}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-3 text-right">
-                {msg.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+              
+              <div className="flex justify-between items-center mt-3">
+                  {msg.role === "assistant" && (
+                      <button 
+                          onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} 
+                          className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1"
+                      >
+                          <Star className="w-3 h-3" /> Rate Response
+                      </button>
+                  )}
+                  <p className="text-[10px] text-muted-foreground ml-auto">
+                    {formatTime(msg.createdAt || msg.timestamp)}
+                  </p>
+              </div>
             </div>
           </div>
         ))}
@@ -72,7 +80,7 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
           <div className="flex justify-start">
             <div className="bg-muted border border-border rounded-md px-5 py-4 shadow-sm flex items-center gap-2">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
-                {model?.name || "Assistant"}
+                Thinking...
               </span>
               <div className="flex items-center gap-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse" />
@@ -85,15 +93,17 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-border bg-card">
-        <ChatInput
-          onSubmit={onSendMessage}
-          isLoading={isLoading}
-          minimal
-          placeholder={`Message ${model?.name || 'AI Assistant'}...`}
-        />
+        <ChatInput onSubmit={onSendMessage} isLoading={isLoading} minimal placeholder={`Message ${model?.name || 'AI Assistant'}...`} />
       </div>
+
+      {ratingModal.isOpen && (
+          <RatingPopup 
+              isOpen={ratingModal.isOpen} 
+              onClose={() => setRatingModal({ isOpen: false, modelId: '' })} 
+              modelId={ratingModal.modelId} 
+          />
+      )}
     </div>
   );
 };
