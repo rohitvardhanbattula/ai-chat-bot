@@ -47,6 +47,7 @@ export interface ModelResponse {
 }
 
 export interface ChatMessage {
+  timestamp: any;
   ID?: string;
   role: "user" | "assistant";
   content: string;

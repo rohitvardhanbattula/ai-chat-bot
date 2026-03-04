@@ -4,7 +4,7 @@ import { generateMultiModelResponse, sendChatMessage, fetchSessions, createSessi
 import ChatInput from "@/components/ChatInput";
 import ComparisonGrid from "@/components/ComparisonGrid";
 import ActiveChat from "@/components/ActiveChat";
-import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X, Building2 } from "lucide-react";
 
 const Index = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -130,7 +130,8 @@ const Index = () => {
       role: "user",
       content: prompt,
       modelId: activeSession.selectedModel,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      timestamp: undefined
     };
 
     setSessions((prev) => prev.map((s) => s.ID === activeSessionId ? { ...s, messages: [...s.messages, userMsg] } : s));
@@ -143,7 +144,8 @@ const Index = () => {
         role: "assistant",
         content: reply,
         modelId: activeSession.selectedModel,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        timestamp: undefined
       };
 
       setSessions((prev) => prev.map((s) => s.ID === activeSessionId ? { ...s, messages: [...s.messages, assistantMsg] } : s));
@@ -154,32 +156,39 @@ const Index = () => {
   }, [activeSessionId, activeSession]);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <aside className={`bg-card border-r border-border transition-all duration-300 flex flex-col ${sidebarOpen ? "w-72 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
-        <div className="p-4 border-b border-border">
-          <button onClick={handleNewChat} className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity">
-            <Plus className="w-4 h-4" /> New Chat
+    <div className="flex h-screen bg-background overflow-hidden font-sans">
+      <aside className={`bg-card border-r border-border transition-all duration-300 flex flex-col ${sidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
+        <div className="p-4 border-b border-border flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-primary" />
+          <span className="font-semibold text-sm tracking-wide">Enterprise AI</span>
+        </div>
+        <div className="p-4">
+          <button onClick={handleNewChat} className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> New Workspace
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {sessions.length === 0 && <p className="text-xs text-muted-foreground text-center p-4">No chat history</p>}
+        <div className="px-3 pb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">Recent Sessions</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
+          {sessions.length === 0 && <p className="text-xs text-muted-foreground text-center p-4">No active sessions</p>}
           {sessions.map((session) => (
-            <div key={session.ID} onClick={() => handleSelectSession(session.ID)} className={`flex items-center justify-between w-full px-3 py-3 text-sm rounded-md transition-colors group cursor-pointer ${activeSessionId === session.ID ? "bg-secondary text-foreground" : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground"}`}>
+            <div key={session.ID} onClick={() => handleSelectSession(session.ID)} className={`flex items-center justify-between w-full px-3 py-2 text-sm rounded-md transition-colors group cursor-pointer ${activeSessionId === session.ID ? "bg-muted text-foreground font-medium" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"}`}>
               {editingSessionId === session.ID ? (
                 <div className="flex items-center gap-2 w-full">
-                  <input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Enter" && saveRename(e as any, session.ID)} className="flex-1 bg-background text-foreground border border-border rounded px-2 py-1 text-xs outline-none" />
+                  <input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Enter" && saveRename(e as any, session.ID)} className="flex-1 bg-background text-foreground border border-border rounded-sm px-2 py-1 text-xs outline-none focus:border-primary" />
                   <button onClick={(e) => saveRename(e, session.ID)} className="text-green-500 hover:text-green-400 p-1"><Check className="w-3.5 h-3.5" /></button>
                   <button onClick={cancelRename} className="text-destructive hover:text-red-400 p-1"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
                 <>
                   <div className="flex items-center gap-2 overflow-hidden flex-1">
-                    <MessageSquare className="w-4 h-4 shrink-0" />
-                    <span className="truncate text-left">{session.title}</span>
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                    <span className="truncate text-left text-xs">{session.title}</span>
                   </div>
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button onClick={(e) => startRename(e, session)} className="hover:text-primary p-1.5"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={(e) => handleDeleteSession(e, session.ID)} className="hover:text-destructive p-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={(e) => startRename(e, session)} className="hover:text-primary p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={(e) => handleDeleteSession(e, session.ID)} className="hover:text-destructive p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 </>
               )}
@@ -188,29 +197,34 @@ const Index = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center px-4 py-3 border-b border-border h-14 shrink-0 gap-4 bg-background z-10">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-            {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
-          </button>
-          <span className="font-mono text-xs text-muted-foreground tracking-wider uppercase font-semibold">AI Gateway</span>
+      <main className="flex-1 flex flex-col min-w-0 bg-background">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-border h-14 shrink-0 bg-card z-10 shadow-sm">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-muted">
+              {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+            </button>
+            <div className="h-4 w-[1px] bg-border"></div>
+            <span className="text-sm font-medium text-foreground">
+               Model Orchestration Gateway
+            </span>
+          </div>
         </header>
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {appState === "input" && (
-            <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+            <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
               <ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} />
             </div>
           )}
 
           {appState === "comparison" && (
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 p-8 overflow-y-auto bg-muted/20">
               <ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} />
             </div>
           )}
 
           {appState === "active-chat" && activeSession && (
-            <div className="flex-1 overflow-hidden pb-4">
+            <div className="flex-1 overflow-hidden pb-4 bg-muted/10">
               <ActiveChat modelId={activeSession.selectedModel} messages={activeSession.messages.map(m => ({ ...m, timestamp: new Date(m.createdAt || Date.now()) }))} onSendMessage={handleChatMessage} onBack={handleNewChat} isLoading={isLoading} />
             </div>
           )}
