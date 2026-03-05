@@ -1,5 +1,5 @@
 const BASE_URL = '';
-const getUserId = () => localStorage.getItem('userId');
+const getUserId = () => localStorage.getItem('token');
 
 export const authUser = async (action: 'login' | 'register', payload: any) => {
     const res = await fetch(`${BASE_URL}/odata/v4/ai/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -10,7 +10,11 @@ export const authUser = async (action: 'login' | 'register', payload: any) => {
 
 export const fetchSessions = async () => {
     const userId = getUserId();
-    if (!userId) return [];
+    if (!userId) 
+    {
+        console.log("User ID not found");
+        return [];
+    }
     const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions?$filter=userId eq '${userId}'&$orderby=createdAt desc`);
     const data = await res.json();
     return data.value || [];
