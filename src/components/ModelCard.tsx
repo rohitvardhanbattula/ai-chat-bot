@@ -7,7 +7,7 @@ import { MODELS } from "@/types/chat";
 
 const ModelCard = ({ modelId, response, isLoading, onAccept }: any) => {
     // Check if the current card is Claude to disable it
-    const isClaude = modelId.toLowerCase() === 'claude';
+    const isClaude = modelId.toLowerCase() === 'LOVABLE';
     
     // Fallback name if MODELS isn't perfectly mapped
     const modelName = MODELS && MODELS[modelId] ? MODELS[modelId].name : modelId.toUpperCase();

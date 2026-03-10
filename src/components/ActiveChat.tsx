@@ -22,7 +22,6 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // Helper to safely format dates and prevent crashes
   const formatTime = (dateStr?: string | Date) => {
     if (!dateStr) return '';
     try {

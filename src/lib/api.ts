@@ -1,12 +1,8 @@
 const BASE_URL = '';
 const getUserId = () => localStorage.getItem('token');
 
-export const authUser = async (action: 'login' | 'register' | 'verifyOTP', payload: any) => {
-    const res = await fetch(`${BASE_URL}/odata/v4/ai/${action}`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(payload) 
-    });
+export const authUser = async (action: 'login' | 'register' |'verifyOTP', payload: any) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || "Authentication failed");
     return data.value;
@@ -14,7 +10,9 @@ export const authUser = async (action: 'login' | 'register' | 'verifyOTP', paylo
 
 export const fetchSessions = async () => {
     const userId = getUserId();
-    if (!userId) return [];
+    if (!userId) {
+        return [];
+    }
     const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions?$filter=userId eq '${userId}'&$orderby=createdAt desc`);
     const data = await res.json();
     return data.value || [];
@@ -34,40 +32,22 @@ export const fetchSessionMessages = async (sessionId: string) => {
 };
 
 export const createSession = async (title: string, selectedModel: string, initialMessages: any[]) => {
-    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ userId: getUserId(), title, selectedModel, messages: initialMessages }) 
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || "Failed to create session");
-    return data;
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: getUserId(), title, selectedModel, messages: initialMessages }) });
+    return res.json();
 };
 
 export const deleteSession = async (sessionId: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { method: 'DELETE' });
 
-export const renameSession = async (sessionId: string, title: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { 
-    method: 'PATCH', 
-    headers: { 'Content-Type': 'application/json' }, 
-    body: JSON.stringify({ title }) 
-});
+export const renameSession = async (sessionId: string, title: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
 
 export const generateMultiModelResponse = async (prompt: string) => {
-    const res = await fetch(`${BASE_URL}/odata/v4/ai/generateMultiModelResponse`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ prompt }) 
-    });
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/generateMultiModelResponse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
     const data = await res.json();
     return data.value || [];
 };
 
 export const submitRating = async (userId: string, modelId: string, category: string, rating: number) => {
-    return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ userId, modelId, category, rating }) 
-    });
+    return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, modelId, category, rating }) });
 };
 
 export const streamChatMessage = async (
@@ -75,11 +55,7 @@ export const streamChatMessage = async (
   onUpdate: (status: 'thinking' | 'chunk' | 'done' | 'error', content?: string) => void
 ) => {
     try {
-        const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ sessionId, modelId, prompt }) 
-        });
+        const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, modelId, prompt }) });
         if (!response.body) throw new Error("ReadableStream not supported");
         
         const reader = response.body.getReader();
@@ -102,5 +78,5 @@ export const streamChatMessage = async (
                 }
             }
         }
-    } catch (error) { onUpdate('error', 'Connection failed.'); }
+    } catch (error) { onUpdate('error', 'model is not available at the moment'); }
 };
