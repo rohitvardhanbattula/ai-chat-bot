@@ -7,6 +7,7 @@ import ActiveChat from "@/components/ActiveChat";
 import Header from "@/components/Header";
 import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X } from "lucide-react";
 import { useAutoLogout } from "@/hooks/useAutoLogout"; 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const Index = () => {
   useAutoLogout(20);
@@ -20,6 +21,7 @@ const Index = () => {
   const [currentPrompt, setCurrentPrompt] = useState("");
   const [responses, setResponses] = useState<ModelResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
 
   useEffect(() => { loadSessions(); }, []);
 
@@ -33,7 +35,14 @@ const Index = () => {
   const activeSession = sessions.find((s) => s.ID === activeSessionId);
 
   const handleNewChat = () => {
-    setAppState("input"); setActiveSessionId(null); setCurrentPrompt(""); setResponses([]);
+    if (sessions.length >= 10) {
+      setShowLimitPopup(true);
+      return;
+    }
+    setAppState("input"); 
+    setActiveSessionId(null); 
+    setCurrentPrompt(""); 
+    setResponses([]);
   };
 
   const handleSelectSession = async (sessionId: string) => {
@@ -54,8 +63,17 @@ const Index = () => {
     e.stopPropagation();
     try {
       await deleteSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.ID !== sessionId));
-      if (activeSessionId === sessionId) handleNewChat();
+      setSessions((prev) => {
+        const updated = prev.filter((s) => s.ID !== sessionId);
+        if (updated.length < 10) setShowLimitPopup(false);
+        return updated;
+      });
+      if (activeSessionId === sessionId) {
+        setAppState("input");
+        setActiveSessionId(null);
+        setCurrentPrompt("");
+        setResponses([]);
+      }
     } catch (error) {}
   };
 
@@ -72,9 +90,16 @@ const Index = () => {
   };
 
   const handleInitialPrompt = useCallback(async (prompt: string) => {
-    setCurrentPrompt(prompt); setAppState("comparison"); setIsLoading(true); setResponses([]);
+    if (sessions.length >= 10) {
+      setShowLimitPopup(true);
+      return;
+    }
+    setCurrentPrompt(prompt); 
+    setAppState("comparison"); 
+    setIsLoading(true); 
+    setResponses([]);
     try { setResponses(await generateMultiModelResponse(prompt)); } finally { setIsLoading(false); }
-  }, []);
+  }, [sessions.length]);
 
   const handleAccept = useCallback(async (modelId: ModelId) => {
     const response = responses.find((r) => r.modelId === modelId);
@@ -100,12 +125,11 @@ const Index = () => {
     
     setIsLoading(true);
 
-    // UPDATED: Handle dynamic chunk appending
     await streamChatMessage(activeSessionId, activeSession.selectedModel, prompt, (status, content) => {
         if (status === 'thinking') {
             setIsLoading(true);
         } else if (status === 'chunk' && content) {
-            setIsLoading(false); // Stop thinking animation once text arrives
+            setIsLoading(false);
             
             setSessions((prev) => prev.map((s) => {
                 if (s.ID !== activeSessionId) return s;
@@ -113,12 +137,10 @@ const Index = () => {
                 const msgs = [...(s.messages || [])];
                 const lastMsg = msgs[msgs.length - 1];
                 
-                // If the last message is already from the assistant, append the chunk text to it
                 if (lastMsg && lastMsg.role === 'assistant') {
                     const updatedMsg = { ...lastMsg, content: lastMsg.content + content };
                     return { ...s, messages: [...msgs.slice(0, -1), updatedMsg] };
                 } else {
-                    // First chunk: Create the new assistant message
                     const newAssistantMsg: ChatMessage = { role: "assistant", content: content, modelId: activeSession.selectedModel, createdAt: new Date().toISOString(), timestamp: undefined };
                     return { ...s, messages: [...msgs, newAssistantMsg] };
                 }
@@ -136,6 +158,31 @@ const Index = () => {
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">
       <Header />
+      
+      <Dialog open={showLimitPopup} onOpenChange={setShowLimitPopup}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Workspace Limit Reached</DialogTitle>
+            <DialogDescription>
+              You have reached the maximum limit of 10 active workspaces. Please delete an older session to create a new one.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto space-y-2 mt-4 pr-2">
+            {sessions.map((session) => (
+              <div key={session.ID} className="flex items-center justify-between p-3 border border-border rounded-md bg-muted/30">
+                <span className="text-sm font-medium truncate mr-4">{session.title}</span>
+                <button 
+                  onClick={(e) => handleDeleteSession(e, session.ID)} 
+                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-1 overflow-hidden h-full">
         <aside className={`bg-card border-r border-border transition-all duration-300 flex flex-col h-full ${sidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
           <div className="p-4 shrink-0">

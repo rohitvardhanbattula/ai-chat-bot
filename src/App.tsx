@@ -4,7 +4,6 @@ import Login from './pages/Login';
 import { Toaster } from "@/components/ui/toaster";
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    // Check for the JWT token
     const isAuthenticated = !!localStorage.getItem('token');
     return isAuthenticated ? children : <Navigate to="/login" />;
 };
