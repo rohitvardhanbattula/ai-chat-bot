@@ -204,7 +204,7 @@ const Index = () => {
                 {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
               </button>
               <div className="h-4 w-[1px] bg-border"></div>
-              <span className="text-sm font-medium text-foreground">Model Orchestration Gateway</span>
+              <span className="text-sm font-medium text-foreground">Multi Model Orchestration Gateway</span>
             </div>
           </header>
           <div className="flex-1 overflow-hidden flex flex-col relative h-full">
