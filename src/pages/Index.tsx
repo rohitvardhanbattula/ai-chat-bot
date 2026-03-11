@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppState, ChatMessage, ModelId, ModelResponse, ChatSession } from "@/types/chat";
-import { generateMultiModelResponse, fetchSessions, createSession, deleteSession, renameSession, fetchSessionMessages, streamChatMessage } from "@/lib/api";
+import { fetchSessions, createSession, deleteSession, renameSession, fetchSessionMessages, streamChatMessage, streamComparison } from "@/lib/api";
 import ChatInput from "@/components/ChatInput";
 import ComparisonGrid from "@/components/ComparisonGrid";
 import ActiveChat from "@/components/ActiveChat";
@@ -71,9 +71,43 @@ const Index = () => {
     } catch (error) {}
   };
 
-  const handleInitialPrompt = useCallback(async (prompt: string) => {
-    setCurrentPrompt(prompt); setAppState("comparison"); setIsLoading(true); setResponses([]);
-    try { setResponses(await generateMultiModelResponse(prompt)); } finally { setIsLoading(false); }
+  const handleInitialPrompt = useCallback((prompt: string) => {
+    setCurrentPrompt(prompt); 
+    setAppState("comparison"); 
+    setIsLoading(true);
+    setResponses([]);
+
+    const models: ModelId[] = ['gemini', 'gpt4o', 'perplexity', 'claude'];
+    let completedCount = 0;
+
+    models.forEach(modelId => {
+        streamComparison(modelId, prompt, (status, content) => {
+            if (status === 'thinking') {
+                setIsLoading(true);
+            } else if (status === 'chunk' && content) {
+                setResponses(prev => {
+                    const exists = prev.find(r => r.modelId === modelId);
+                    if (exists) {
+                        return prev.map(r => r.modelId === modelId ? { ...r, content: r.content + content } : r);
+                    }
+                    return [...prev, { modelId, content, latency: 0, error: "" }];
+                });
+            } else if (status === 'error') {
+                setResponses(prev => {
+                    const exists = prev.find(r => r.modelId === modelId);
+                    if (exists) {
+                        return prev.map(r => r.modelId === modelId ? { ...r, content: "model is not available at the moment" } : r);
+                    }
+                    return [...prev, { modelId, content: "model is not available at the moment", latency: 0, error: "" }];
+                });
+                completedCount++;
+                if (completedCount === models.length) setIsLoading(false);
+            } else if (status === 'done') {
+                completedCount++;
+                if (completedCount === models.length) setIsLoading(false);
+            }
+        });
+    });
   }, []);
 
   const handleAccept = useCallback(async (modelId: ModelId) => {

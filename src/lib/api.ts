@@ -40,12 +40,6 @@ export const deleteSession = async (sessionId: string) => await fetch(`${BASE_UR
 
 export const renameSession = async (sessionId: string, title: string) => await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
 
-export const generateMultiModelResponse = async (prompt: string) => {
-    const res = await fetch(`${BASE_URL}/odata/v4/ai/generateMultiModelResponse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
-    const data = await res.json();
-    return data.value || [];
-};
-
 export const submitRating = async (userId: string, modelId: string, category: string, rating: number) => {
     return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, modelId, category, rating }) });
 };
@@ -56,6 +50,37 @@ export const streamChatMessage = async (
 ) => {
     try {
         const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, modelId, prompt }) });
+        if (!response.body) throw new Error("ReadableStream not supported");
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n\n').filter(Boolean);
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.replace('data: ', ''));
+                    if (data.status === 'thinking') onUpdate('thinking');
+                    else if (data.status === 'chunk') onUpdate('chunk', data.content);
+                    else if (data.status === 'done') onUpdate('done');
+                    else if (data.status === 'error') onUpdate('error', data.message);
+                }
+            }
+        }
+    } catch (error) { onUpdate('error', 'model is not available at the moment'); }
+};
+
+export const streamComparison = async (
+  modelId: string, prompt: string, 
+  onUpdate: (status: 'thinking' | 'chunk' | 'done' | 'error', content?: string) => void
+) => {
+    try {
+        const response = await fetch(`${BASE_URL}/odata/streamComparison`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, prompt }) });
         if (!response.body) throw new Error("ReadableStream not supported");
         
         const reader = response.body.getReader();
