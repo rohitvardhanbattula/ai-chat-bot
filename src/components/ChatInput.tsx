@@ -32,9 +32,9 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
   };
 
   return (
-    <div className={minimal ? "w-full" : "flex flex-col items-center gap-8 w-full max-w-3xl mx-auto"}>
+    <div className={minimal ? "w-full" : "flex flex-col items-center gap-5 sm:gap-6 w-full max-w-3xl mx-auto py-4"}>
       {!minimal && (
-        <div className="text-center animate-slide-up w-full flex flex-col items-center">
+        <div className="text-center animate-slide-up w-full flex flex-col items-center shrink-0">
           <h1 className="text-2xl font-semibold text-foreground mb-2">
             Code Generation
           </h1>
@@ -45,13 +45,13 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       )}
 
       {isLimitReached && (
-        <div className="w-full flex items-center justify-center gap-2 p-3 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-md animate-in fade-in slide-in-from-bottom-2">
+        <div className="w-full flex items-center justify-center gap-2 p-3 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-md animate-in fade-in slide-in-from-bottom-2 shrink-0">
           <AlertCircle className="w-4 h-4" />
           Maximum prompt limit (20) reached. Please start a new chat to continue.
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className={`w-full ${minimal ? "" : "animate-slide-up"}`}>
+      <form onSubmit={handleSubmit} className={`w-full shrink-0 ${minimal ? "" : "animate-slide-up"}`}>
         <div className={`relative bg-card border border-border shadow-sm flex flex-col focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all ${minimal ? "rounded-md" : "rounded-lg"} ${isLimitReached ? "opacity-50 pointer-events-none grayscale" : ""}`}>
           <textarea
             value={input}
@@ -84,20 +84,20 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       </form>
 
       {!minimal && (
-        <div className={`grid grid-cols-2 gap-3 w-full animate-slide-up ${isLimitReached ? "opacity-50 pointer-events-none" : ""}`} style={{ animationDelay: "0.1s" }}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 w-full shrink-0 animate-slide-up ${isLimitReached ? "opacity-50 pointer-events-none" : ""}`} style={{ animationDelay: "0.1s" }}>
           {PROMPT_TEMPLATES.map((t) => (
             <button
               key={t.label}
               onClick={() => handleTemplate(t.prompt)}
               disabled={isLimitReached}
-              className="flex items-start gap-3 p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-left group shadow-sm"
+              className="flex items-start gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-left group shadow-sm"
             >
               <div className="p-2 bg-background rounded-md border border-border shrink-0">
                 <t.icon className="w-4 h-4 text-primary" />
               </div>
               <div className="pt-0.5">
                 <p className="text-sm font-semibold text-foreground mb-1">{t.label}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{t.prompt}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{t.prompt}</p>
               </div>
             </button>
           ))}

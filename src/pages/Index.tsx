@@ -167,8 +167,8 @@ const Index = () => {
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">
       <Header />
-      <div className="flex flex-1 overflow-hidden h-full">
-        <aside className={`bg-card border-r border-border transition-all duration-300 flex flex-col h-full ${sidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
+      <div className="flex flex-1 overflow-hidden">
+        <aside className={`bg-card border-r border-border transition-all duration-300 flex flex-col ${sidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
           <div className="p-4 shrink-0">
             <button onClick={handleNewChat} className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 shadow-sm">
               <Plus className="w-4 h-4" /> New Workspace
@@ -197,7 +197,7 @@ const Index = () => {
             ))}
           </div>
         </aside>
-        <main className="flex-1 flex flex-col min-w-0 bg-background h-full overflow-hidden">
+        <main className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
           <header className="flex items-center justify-between px-4 py-3 border-b border-border h-14 shrink-0 bg-card z-10 shadow-sm">
             <div className="flex items-center gap-3">
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted">
@@ -207,11 +207,17 @@ const Index = () => {
               <span className="text-sm font-medium text-foreground">Multi Model Orchestration Gateway</span>
             </div>
           </header>
-          <div className="flex-1 overflow-hidden flex flex-col relative h-full">
-            {appState === "input" && <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto"><ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} /></div>}
-            {appState === "comparison" && <div className="flex-1 p-8 overflow-y-auto bg-muted/20"><ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} /></div>}
+          <div className="flex-1 overflow-hidden relative">
+            {appState === "input" && (
+  <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
+    {/* Using m-auto here prevents the top from getting cut off while still centering it! */}
+    <div className="m-auto w-full">
+      <ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} />
+    </div>
+  </div>
+)}{appState === "comparison" && <div className="h-full p-4 sm:p-6 bg-muted/20 overflow-hidden"><ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} /></div>}
             {appState === "active-chat" && activeSession && (
-              <div className="flex-1 overflow-hidden pb-4 bg-muted/10">
+              <div className="h-full overflow-hidden bg-muted/10 pb-2">
                 <ActiveChat modelId={activeSession.selectedModel} messages={(activeSession.messages || []).map(m => ({ ...m, timestamp: m.timestamp || new Date(m.createdAt || Date.now()) }))} onSendMessage={handleChatMessage} onBack={handleNewChat} isLoading={isLoading} />
               </div>
             )}

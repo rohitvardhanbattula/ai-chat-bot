@@ -40,9 +40,14 @@ export default function RatingPopup({ isOpen, onClose, modelId }: { isOpen: bool
                         ))}
                     </div>
                     <Select onValueChange={setCategory}>
-                        <SelectTrigger><SelectValue placeholder="Select SAP Content Area" /></SelectTrigger>
-                        <SelectContent>
-                            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select SAP Content Area" />
+                        </SelectTrigger>
+                        {/* Added z-[9999] to float above the modal and max-h-48 to make the 11 items scrollable */}
+                        <SelectContent className="z-[9999] max-h-48 overflow-y-auto">
+                            {CATEGORIES.map(c => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
