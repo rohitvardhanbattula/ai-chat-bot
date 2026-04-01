@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { ArrowLeft, Star } from "lucide-react";
+import { ArrowLeft, Star, Copy, Check } from "lucide-react";
 import { ChatMessage, ModelId, MODELS } from "@/types/chat";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ChatInput from "./ChatInput";
@@ -17,6 +17,7 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
   const model = MODELS[modelId];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [ratingModal, setRatingModal] = useState({ isOpen: false, modelId: '' });
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,6 +30,12 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
     } catch (e) {
         return '';
     }
+  };
+
+  const handleCopy = (content: string, index: number) => {
+    navigator.clipboard.writeText(content);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
@@ -51,6 +58,7 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
                   {msg.role === "user" ? "You" : model?.name || "Assistant"}
                 </span>
               </div>
+              
               {msg.role === "assistant" ? (
                 <div className="text-sm prose prose-invert max-w-none">
                   <MarkdownRenderer content={msg.content} />
@@ -59,14 +67,25 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
                 <p className="text-sm leading-relaxed">{msg.content}</p>
               )}
               
-              <div className="flex justify-between items-center mt-3">
-                  {msg.role === "assistant" && (
-                      <button 
-                          onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} 
-                          className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1"
-                      >
-                          <Star className="w-3 h-3" /> Rate Response
-                      </button>
+              <div className="flex justify-between items-center mt-3 pt-2 border-t border-border/30">
+                  {msg.role === "assistant" ? (
+                      <div className="flex items-center gap-4">
+                          <button 
+                              onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} 
+                              className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                          >
+                              <Star className="w-3 h-3" /> Rate Response
+                          </button>
+                          <button 
+                              onClick={() => handleCopy(msg.content, i)} 
+                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                          >
+                              {copiedIndex === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                              {copiedIndex === i ? "Copied!" : "Copy"}
+                          </button>
+                      </div>
+                  ) : (
+                      <div /> /* Empty div to keep the timestamp right-aligned for user messages */
                   )}
                   <p className="text-[10px] text-muted-foreground ml-auto">
                     {formatTime(msg.createdAt || msg.timestamp)}
@@ -75,6 +94,7 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
             </div>
           </div>
         ))}
+        
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-muted border border-border rounded-md px-5 py-4 shadow-sm flex items-center gap-2">

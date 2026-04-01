@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { MODELS } from "@/types/chat"; 
+import { Copy, Check } from "lucide-react";
 
 const ModelCard = ({ modelId, response, isLoading, onAccept }: any) => {
+    const [isCopied, setIsCopied] = useState(false);
     const isClaude = modelId.toLowerCase() === 'lovable';
     const modelName = MODELS && MODELS[modelId] ? MODELS[modelId].name : modelId.toUpperCase();
     
@@ -33,6 +36,12 @@ const ModelCard = ({ modelId, response, isLoading, onAccept }: any) => {
             }
         }
     }
+
+    const handleCopy = (content: string) => {
+        navigator.clipboard.writeText(content);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    };
 
     return (
         <Card className={`flex flex-col h-[400px] ${isClaude ? 'opacity-50 pointer-events-none grayscale' : 'hover:border-primary/50 transition-colors'}`}>
@@ -79,8 +88,21 @@ const ModelCard = ({ modelId, response, isLoading, onAccept }: any) => {
                     response.error || hasErrorText ? (
                         <p className="text-sm font-medium text-destructive mt-2">{response.error || response.content}</p>
                     ) : (
-                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                            <MarkdownRenderer content={displayContent} />
+                        <div className="flex flex-col">
+                            <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                                <MarkdownRenderer content={displayContent} />
+                            </div>
+                            <div className="flex justify-end mt-4 pt-2 border-t border-border/50">
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => handleCopy(displayContent)}
+                                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    {isCopied ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                                    {isCopied ? "Copied!" : "Copy"}
+                                </Button>
+                            </div>
                         </div>
                     )
                 ) : (

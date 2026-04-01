@@ -32,6 +32,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
   };
 
   return (
+    // Reverted to standard "w-full" for minimal so it spans the entire chat area naturally
     <div className={minimal ? "w-full" : "flex flex-col items-center gap-5 sm:gap-6 w-full max-w-3xl mx-auto py-4"}>
       {!minimal && (
         <div className="text-center animate-slide-up w-full flex flex-col items-center shrink-0">
@@ -52,7 +53,14 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       )}
 
       <form onSubmit={handleSubmit} className={`w-full shrink-0 ${minimal ? "" : "animate-slide-up"}`}>
-        <div className={`relative bg-card border border-border shadow-sm flex flex-col focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all ${minimal ? "rounded-md" : "rounded-lg"} ${isLimitReached ? "opacity-50 pointer-events-none grayscale" : ""}`}>
+        <div 
+          className={`relative flex flex-col transition-all duration-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25 
+            ${minimal 
+              ? "bg-card border-2 border-primary/60 rounded-lg shadow-lg shadow-primary/5 hover:border-primary/80" 
+              : "bg-accent/10 border-2 border-primary/40 rounded-xl shadow-md"
+            } 
+            ${isLimitReached ? "opacity-50 pointer-events-none grayscale" : ""}`}
+        >
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -62,22 +70,23 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
                 handleSubmit(e);
               }
             }}
-            placeholder={isLimitReached ? "Chat limit reached..." : (placeholder || "Describe your enterprise requirement (e.g., ABAP, Node.js, CAP, Fiori)...")}
-            rows={minimal ? 1 : 4}
-            className="w-full bg-transparent text-foreground placeholder:text-muted-foreground resize-none focus:outline-none px-4 py-3 text-sm"
+            placeholder={isLimitReached ? "Chat limit reached..." : (placeholder || "Type your message here...")}
+            rows={minimal ? 1 : 4} // Reverted to original 1 row so it doesn't take up too much vertical space initially
+            className={`w-full bg-transparent text-foreground placeholder:text-foreground/50 resize-none focus:outline-none ${minimal ? "px-4 py-3 text-sm" : "px-5 py-4 text-base"}`}
             disabled={isLoading || isLimitReached}
           />
-          <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-t border-border">
+          
+          <div className={`flex items-center justify-between px-3 py-2 border-t-2 border-primary/10 bg-muted/20 ${minimal ? "rounded-b-lg" : "rounded-b-xl"}`}>
             <span className="text-[11px] text-muted-foreground font-mono">
               {input.length > 0 ? `${input.length} characters` : "Shift + Enter for new line"}
             </span>
             <button
               type="submit"
               disabled={!input.trim() || isLoading || isLimitReached}
-              className="flex items-center gap-2 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 hover:bg-primary/90 transition-colors shadow-sm"
+              className={`flex items-center gap-2 rounded-md bg-primary text-primary-foreground font-bold disabled:opacity-50 hover:bg-primary/90 transition-all shadow-sm active:scale-95 ${minimal ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}`}
             >
-              <Send className="w-3.5 h-3.5" />
-              {isLoading ? "Processing..." : "Submit"}
+              <Send className={`${minimal ? "w-3.5 h-3.5" : "w-4 h-4"}`} />
+              {isLoading ? "Thinking..." : "Send"}
             </button>
           </div>
         </div>
