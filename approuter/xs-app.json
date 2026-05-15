@@ -5,7 +5,13 @@
       "source": "^/?odata/(.*)$",
       "target": "/odata/$1",
       "destination": "AiChatDestination",
-      "csrfProtection": false,
+      "csrfProtection": false, 
+      "authenticationType": "none"
+    },
+    {
+      "source": "^/([^.]*)$",
+      "target": "/index.html",
+      "localDir": "webapp",
       "authenticationType": "none"
     },
     {
