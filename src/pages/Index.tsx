@@ -10,7 +10,6 @@ import { useAutoLogout } from "@/hooks/useAutoLogout";
 
 const Index = () => {
   useAutoLogout(20);
-
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -32,15 +31,12 @@ const Index = () => {
 
   const activeSession = sessions.find((s) => s.ID === activeSessionId);
 
-  const handleNewChat = () => {
-    setAppState("input"); setActiveSessionId(null); setCurrentPrompt(""); setResponses([]);
-  };
+  const handleNewChat = () => { setAppState("input"); setActiveSessionId(null); setCurrentPrompt(""); setResponses([]); };
 
   const handleSelectSession = async (sessionId: string) => {
     setActiveSessionId(sessionId);
     setAppState("active-chat");
     const session = sessions.find((s) => s.ID === sessionId);
-    
     if (session && (!session.messages || session.messages.length === 0)) {
       setIsLoading(true);
       try {
@@ -71,33 +67,29 @@ const Index = () => {
     } catch (error) {}
   };
 
-  const handleInitialPrompt = useCallback((prompt: string) => {
+  const handleInitialPrompt = useCallback((prompt: string, category: string, extractedText: string | null) => {
     setCurrentPrompt(prompt); 
     setAppState("comparison"); 
     setIsLoading(true);
     setResponses([]);
 
-    const models: ModelId[] = ['gemini', 'gpt4o', 'perplexity', 'claude'];
+    const models: ModelId[] = ['gpt4o', 'claude'];
     let completedCount = 0;
 
     models.forEach(modelId => {
-        streamComparison(modelId, prompt, (status, content) => {
+        streamComparison(modelId, prompt, category, extractedText, (status, content) => {
             if (status === 'thinking') {
                 setIsLoading(true);
             } else if (status === 'chunk' && content) {
                 setResponses(prev => {
                     const exists = prev.find(r => r.modelId === modelId);
-                    if (exists) {
-                        return prev.map(r => r.modelId === modelId ? { ...r, content: r.content + content } : r);
-                    }
+                    if (exists) return prev.map(r => r.modelId === modelId ? { ...r, content: r.content + content } : r);
                     return [...prev, { modelId, content, latency: 0, error: "" }];
                 });
             } else if (status === 'error') {
                 setResponses(prev => {
                     const exists = prev.find(r => r.modelId === modelId);
-                    if (exists) {
-                        return prev.map(r => r.modelId === modelId ? { ...r, content: "model is not available at the moment" } : r);
-                    }
+                    if (exists) return prev.map(r => r.modelId === modelId ? { ...r, content: "model is not available at the moment" } : r);
                     return [...prev, { modelId, content: "model is not available at the moment", latency: 0, error: "" }];
                 });
                 completedCount++;
@@ -126,7 +118,7 @@ const Index = () => {
     } catch (error) {}
   }, [responses, currentPrompt]);
 
-  const handleChatMessage = useCallback(async (prompt: string) => {
+  const handleChatMessage = useCallback(async (prompt: string, category: string, extractedText: string | null) => {
     if (!activeSessionId || !activeSession?.selectedModel) return;
 
     const userMsg: ChatMessage = { role: "user", content: prompt, modelId: activeSession.selectedModel, createdAt: new Date().toISOString(), timestamp: undefined };
@@ -134,18 +126,15 @@ const Index = () => {
     
     setIsLoading(true);
 
-    await streamChatMessage(activeSessionId, activeSession.selectedModel, prompt, (status, content) => {
+    await streamChatMessage(activeSessionId, activeSession.selectedModel, prompt, category, extractedText, (status, content) => {
         if (status === 'thinking') {
             setIsLoading(true);
         } else if (status === 'chunk' && content) {
             setIsLoading(false);
-            
             setSessions((prev) => prev.map((s) => {
                 if (s.ID !== activeSessionId) return s;
-                
                 const msgs = [...(s.messages || [])];
                 const lastMsg = msgs[msgs.length - 1];
-                
                 if (lastMsg && lastMsg.role === 'assistant') {
                     const updatedMsg = { ...lastMsg, content: lastMsg.content + content };
                     return { ...s, messages: [...msgs.slice(0, -1), updatedMsg] };
@@ -209,13 +198,11 @@ const Index = () => {
           </header>
           <div className="flex-1 overflow-hidden relative">
             {appState === "input" && (
-  <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
-    {/* Using m-auto here prevents the top from getting cut off while still centering it! */}
-    <div className="m-auto w-full">
-      <ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} />
-    </div>
-  </div>
-)}{appState === "comparison" && <div className="h-full p-4 sm:p-6 bg-muted/20 overflow-hidden"><ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} /></div>}
+              <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
+                <div className="m-auto w-full"><ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} /></div>
+              </div>
+            )}
+            {appState === "comparison" && <div className="h-full p-4 sm:p-6 bg-muted/20 overflow-hidden"><ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} /></div>}
             {appState === "active-chat" && activeSession && (
               <div className="h-full overflow-hidden bg-muted/10 pb-2">
                 <ActiveChat modelId={activeSession.selectedModel} messages={(activeSession.messages || []).map(m => ({ ...m, timestamp: m.timestamp || new Date(m.createdAt || Date.now()) }))} onSendMessage={handleChatMessage} onBack={handleNewChat} isLoading={isLoading} />

@@ -1,4 +1,4 @@
-export type ModelId = "gemini" | "claude" | "gpt4o" | "perplexity";
+export type ModelId = "claude" | "gpt4o";
 
 export interface ModelInfo {
   id: ModelId;
@@ -9,13 +9,13 @@ export interface ModelInfo {
 }
 
 export const MODELS: Record<ModelId, ModelInfo> = {
-  gemini: {
+  /*gemini: {
     id: "gemini",
     name: "Gemini",
     provider: "Google",
     colorClass: "text-model-gemini",
     borderClass: "model-card-gemini",
-  },
+  },*/
   claude: {
     id: "claude",
     name: "Claude",
@@ -29,14 +29,14 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     provider: "OpenAI",
     colorClass: "text-model-gpt",
     borderClass: "model-card-gpt",
-  },
+  }/*,
   perplexity: {
     id: "perplexity",
     name: "Sonar",
     provider: "Perplexity",
     colorClass: "text-model-azure",
     borderClass: "model-card-azure",
-  },
+  },*/
 };
 
 export interface ModelResponse {

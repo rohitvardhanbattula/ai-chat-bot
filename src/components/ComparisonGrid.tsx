@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { ModelId, ModelResponse } from "@/types/chat";
 import ModelCard from "./ModelCard";
 
-const MODEL_ORDER: ModelId[] = ["gemini", "claude", "gpt4o", "perplexity"];
+const MODEL_ORDER: ModelId[] = ["claude", "gpt4o"];
 
 interface ComparisonGridProps {
   responses: ModelResponse[];

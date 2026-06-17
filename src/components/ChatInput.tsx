@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Send, Zap, Code2, Database, Workflow, AlertCircle } from "lucide-react";
+import { useState, useRef } from "react";
+import { Send, Zap, Code2, Database, Workflow, AlertCircle, Paperclip, X } from "lucide-react";
+import { uploadDocument } from "@/lib/api";
 
 interface ChatInputProps {
-  onSubmit: (prompt: string) => void;
+  onSubmit: (prompt: string, category: string, extractedText: string | null) => void;
   isLoading?: boolean;
   minimal?: boolean;
   placeholder?: string;
@@ -16,14 +17,38 @@ const PROMPT_TEMPLATES = [
   { icon: Zap, label: "Fiori Elements", prompt: "Generate a List Report Fiori Elements app with custom annotations" },
 ];
 
+const CATEGORIES = ["abap-simple", "abap-complex"];
+
 const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }: ChatInputProps) => {
   const [input, setInput] = useState("");
+  const [category, setCategory] = useState("abap-simple");
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || isLimitReached) return;
-    onSubmit(input.trim());
+    if (!input.trim() || isLoading || isLimitReached || isUploading) return;
+    
+    let textToPass = extractedText;
+    if (file && !extractedText) {
+        setIsUploading(true);
+        try {
+            textToPass = await uploadDocument(file);
+            setExtractedText(textToPass);
+        } catch (err) {
+            alert("File extraction failed");
+            setIsUploading(false);
+            return;
+        }
+        setIsUploading(false);
+    }
+    
+    onSubmit(input.trim(), category, textToPass);
     setInput("");
+    setFile(null);
+    setExtractedText(null);
   };
 
   const handleTemplate = (prompt: string) => {
@@ -31,17 +56,19 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
     setInput(prompt);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setExtractedText(null);
+    }
+  };
+
   return (
-    // Reverted to standard "w-full" for minimal so it spans the entire chat area naturally
     <div className={minimal ? "w-full" : "flex flex-col items-center gap-5 sm:gap-6 w-full max-w-3xl mx-auto py-4"}>
       {!minimal && (
         <div className="text-center animate-slide-up w-full flex flex-col items-center shrink-0">
-          <h1 className="text-2xl font-semibold text-foreground mb-2">
-            Code Generation
-          </h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Input your requirements. Our gateway evaluates responses across optimal LLMs to ensure code quality and accuracy.
-          </p>
+          <h1 className="text-2xl font-semibold text-foreground mb-2">Code Generation</h1>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">Input your requirements or upload a Functional Spec.</p>
         </div>
       )}
 
@@ -53,27 +80,32 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       )}
 
       <form onSubmit={handleSubmit} className={`w-full shrink-0 ${minimal ? "" : "animate-slide-up"}`}>
-        <div 
-          className={`relative flex flex-col transition-all duration-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25 
-            ${minimal 
-              ? "bg-card border-2 border-primary/60 rounded-lg shadow-lg shadow-primary/5 hover:border-primary/80" 
-              : "bg-accent/10 border-2 border-primary/40 rounded-xl shadow-md"
-            } 
-            ${isLimitReached ? "opacity-50 pointer-events-none grayscale" : ""}`}
-        >
+        <div className={`relative flex flex-col transition-all duration-200 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25 ${minimal ? "bg-card border-2 border-primary/60 rounded-lg shadow-lg" : "bg-accent/10 border-2 border-primary/40 rounded-xl shadow-md"} ${isLimitReached ? "opacity-50 pointer-events-none grayscale" : ""}`}>
+          
+          <div className="flex items-center gap-2 p-2 border-b border-primary/10 bg-muted/10">
+            <select value={category} onChange={(e) => setCategory(e.target.value) }
+  className="text-xs bg-background text-foreground outline-none border border-border rounded px-2 py-1 cursor-pointer">   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs flex items-center gap-1 hover:text-primary transition-colors">
+              <Paperclip className="w-3.5 h-3.5" /> Attach Spec
+            </button>
+            {file && (
+              <div className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded text-xs">
+                <span className="truncate max-w-[150px]">{file.name}</span>
+                <button type="button" onClick={() => { setFile(null); setExtractedText(null); }}><X className="w-3 h-3 hover:text-destructive" /></button>
+              </div>
+            )}
+          </div>
+
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
             placeholder={isLimitReached ? "Chat limit reached..." : (placeholder || "Type your message here...")}
-            rows={minimal ? 1 : 4} // Reverted to original 1 row so it doesn't take up too much vertical space initially
+            rows={minimal ? 1 : 4}
             className={`w-full bg-transparent text-foreground placeholder:text-foreground/50 resize-none focus:outline-none ${minimal ? "px-4 py-3 text-sm" : "px-5 py-4 text-base"}`}
-            disabled={isLoading || isLimitReached}
+            disabled={isLoading || isLimitReached || isUploading}
           />
           
           <div className={`flex items-center justify-between px-3 py-2 border-t-2 border-primary/10 bg-muted/20 ${minimal ? "rounded-b-lg" : "rounded-b-xl"}`}>
@@ -82,11 +114,11 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
             </span>
             <button
               type="submit"
-              disabled={!input.trim() || isLoading || isLimitReached}
+              disabled={!input.trim() || isLoading || isLimitReached || isUploading}
               className={`flex items-center gap-2 rounded-md bg-primary text-primary-foreground font-bold disabled:opacity-50 hover:bg-primary/90 transition-all shadow-sm active:scale-95 ${minimal ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}`}
             >
               <Send className={`${minimal ? "w-3.5 h-3.5" : "w-4 h-4"}`} />
-              {isLoading ? "Thinking..." : "Send"}
+              {isLoading || isUploading ? "Thinking..." : "Send"}
             </button>
           </div>
         </div>
@@ -95,15 +127,8 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       {!minimal && (
         <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 w-full shrink-0 animate-slide-up ${isLimitReached ? "opacity-50 pointer-events-none" : ""}`} style={{ animationDelay: "0.1s" }}>
           {PROMPT_TEMPLATES.map((t) => (
-            <button
-              key={t.label}
-              onClick={() => handleTemplate(t.prompt)}
-              disabled={isLimitReached}
-              className="flex items-start gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-left group shadow-sm"
-            >
-              <div className="p-2 bg-background rounded-md border border-border shrink-0">
-                <t.icon className="w-4 h-4 text-primary" />
-              </div>
+            <button key={t.label} onClick={() => handleTemplate(t.prompt)} disabled={isLimitReached} className="flex items-start gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-left group shadow-sm">
+              <div className="p-2 bg-background rounded-md border border-border shrink-0"><t.icon className="w-4 h-4 text-primary" /></div>
               <div className="pt-0.5">
                 <p className="text-sm font-semibold text-foreground mb-1">{t.label}</p>
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{t.prompt}</p>

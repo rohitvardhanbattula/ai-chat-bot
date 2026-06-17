@@ -10,9 +10,7 @@ export const authUser = async (action: 'login' | 'register' |'verifyOTP', payloa
 
 export const fetchSessions = async () => {
     const userId = getUserId();
-    if (!userId) {
-        return [];
-    }
+    if (!userId) return [];
     const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions?$filter=userId eq '${userId}'&$orderby=createdAt desc`);
     const data = await res.json();
     return data.value || [];
@@ -44,24 +42,29 @@ export const submitRating = async (userId: string, modelId: string, category: st
     return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, modelId, category, rating }) });
 };
 
+export const uploadDocument = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}/odata/uploadDoc`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    return data.text;
+};
+
 export const streamChatMessage = async (
-  sessionId: string, modelId: string, prompt: string, 
+  sessionId: string, modelId: string, prompt: string, category: string, extractedText: string | null,
   onUpdate: (status: 'thinking' | 'chunk' | 'done' | 'error', content?: string) => void
 ) => {
     try {
-        const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, modelId, prompt }) });
+        const response = await fetch(`${BASE_URL}/odata/streamChatMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, modelId, prompt, category, extractedText }) });
         if (!response.body) throw new Error("ReadableStream not supported");
-        
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n\n').filter(Boolean);
-
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const data = JSON.parse(line.replace('data: ', ''));
@@ -76,23 +79,19 @@ export const streamChatMessage = async (
 };
 
 export const streamComparison = async (
-  modelId: string, prompt: string, 
+  modelId: string, prompt: string, category: string, extractedText: string | null,
   onUpdate: (status: 'thinking' | 'chunk' | 'done' | 'error', content?: string) => void
 ) => {
     try {
-        const response = await fetch(`${BASE_URL}/odata/streamComparison`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, prompt }) });
+        const response = await fetch(`${BASE_URL}/odata/streamComparison`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId, prompt, category, extractedText }) });
         if (!response.body) throw new Error("ReadableStream not supported");
-        
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n\n').filter(Boolean);
-
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const data = JSON.parse(line.replace('data: ', ''));

@@ -8,7 +8,7 @@ import RatingPopup from "./RatingPopup";
 interface ActiveChatProps {
   modelId: ModelId;
   messages: ChatMessage[];
-  onSendMessage: (prompt: string) => void;
+  onSendMessage: (prompt: string, category: string, extractedText: string | null) => void;
   onBack: () => void;
   isLoading: boolean;
 }
@@ -19,17 +19,11 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
   const [ratingModal, setRatingModal] = useState({ isOpen: false, modelId: '' });
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
 
   const formatTime = (dateStr?: string | Date) => {
     if (!dateStr) return '';
-    try {
-        return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-        return '';
-    }
+    try { return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
   };
 
   const handleCopy = (content: string, index: number) => {
@@ -60,9 +54,7 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
               </div>
               
               {msg.role === "assistant" ? (
-                <div className="text-sm prose prose-invert max-w-none">
-                  <MarkdownRenderer content={msg.content} />
-                </div>
+                <div className="text-sm prose prose-invert max-w-none"><MarkdownRenderer content={msg.content} /></div>
               ) : (
                 <p className="text-sm leading-relaxed">{msg.content}</p>
               )}
@@ -70,37 +62,24 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
               <div className="flex justify-between items-center mt-3 pt-2 border-t border-border/30">
                   {msg.role === "assistant" ? (
                       <div className="flex items-center gap-4">
-                          <button 
-                              onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} 
-                              className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
-                          >
+                          <button onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors">
                               <Star className="w-3 h-3" /> Rate Response
                           </button>
-                          <button 
-                              onClick={() => handleCopy(msg.content, i)} 
-                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                          >
+                          <button onClick={() => handleCopy(msg.content, i)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
                               {copiedIndex === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                               {copiedIndex === i ? "Copied!" : "Copy"}
                           </button>
                       </div>
-                  ) : (
-                      <div /> /* Empty div to keep the timestamp right-aligned for user messages */
-                  )}
-                  <p className="text-[10px] text-muted-foreground ml-auto">
-                    {formatTime(msg.createdAt || msg.timestamp)}
-                  </p>
+                  ) : <div />}
+                  <p className="text-[10px] text-muted-foreground ml-auto">{formatTime(msg.createdAt || msg.timestamp)}</p>
               </div>
             </div>
           </div>
         ))}
-        
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-muted border border-border rounded-md px-5 py-4 shadow-sm flex items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
-                Thinking...
-              </span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">Thinking...</span>
               <div className="flex items-center gap-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse" />
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-pulse" style={{ animationDelay: "0.2s" }} />
@@ -116,15 +95,8 @@ const ActiveChat = ({ modelId, messages, onSendMessage, onBack, isLoading }: Act
         <ChatInput onSubmit={onSendMessage} isLoading={isLoading} minimal placeholder={`Message ${model?.name || 'AI Assistant'}...`} />
       </div>
 
-      {ratingModal.isOpen && (
-          <RatingPopup 
-              isOpen={ratingModal.isOpen} 
-              onClose={() => setRatingModal({ isOpen: false, modelId: '' })} 
-              modelId={ratingModal.modelId} 
-          />
-      )}
+      {ratingModal.isOpen && <RatingPopup isOpen={ratingModal.isOpen} onClose={() => setRatingModal({ isOpen: false, modelId: '' })} modelId={ratingModal.modelId} />}
     </div>
   );
 };
-
 export default ActiveChat;
