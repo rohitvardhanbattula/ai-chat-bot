@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:4004',
         changeOrigin: true,
         secure: false,
+        timeout: 600000
       }
     },
   },

@@ -19,6 +19,9 @@ const Index = () => {
   const [currentPrompt, setCurrentPrompt] = useState("");
   const [responses, setResponses] = useState<ModelResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // UPDATED: Added state to hold the document context
+  const [extractedText, setExtractedText] = useState<string | null>(null);
 
   useEffect(() => { loadSessions(); }, []);
 
@@ -31,11 +34,19 @@ const Index = () => {
 
   const activeSession = sessions.find((s) => s.ID === activeSessionId);
 
-  const handleNewChat = () => { setAppState("input"); setActiveSessionId(null); setCurrentPrompt(""); setResponses([]); };
+  // UPDATED: Clear extractedText when starting a new chat
+  const handleNewChat = () => { 
+    setAppState("input"); 
+    setActiveSessionId(null); 
+    setCurrentPrompt(""); 
+    setResponses([]); 
+    setExtractedText(null); 
+  };
 
   const handleSelectSession = async (sessionId: string) => {
     setActiveSessionId(sessionId);
     setAppState("active-chat");
+    setExtractedText(null);
     const session = sessions.find((s) => s.ID === sessionId);
     if (session && (!session.messages || session.messages.length === 0)) {
       setIsLoading(true);
@@ -67,8 +78,10 @@ const Index = () => {
     } catch (error) {}
   };
 
-  const handleInitialPrompt = useCallback((prompt: string, category: string, extractedText: string | null) => {
+  // UPDATED: Save incoming extractedText to state so it isn't forgotten
+  const handleInitialPrompt = useCallback((prompt: string, category: string, incomingExtractedText: string | null) => {
     setCurrentPrompt(prompt); 
+    setExtractedText(incomingExtractedText);
     setAppState("comparison"); 
     setIsLoading(true);
     setResponses([]);
@@ -77,7 +90,7 @@ const Index = () => {
     let completedCount = 0;
 
     models.forEach(modelId => {
-        streamComparison(modelId, prompt, category, extractedText, (status, content) => {
+        streamComparison(modelId, prompt, category, incomingExtractedText, (status, content) => {
             if (status === 'thinking') {
                 setIsLoading(true);
             } else if (status === 'chunk' && content) {
@@ -102,6 +115,7 @@ const Index = () => {
     });
   }, []);
 
+  // UPDATED: Pass extractedText to createSession so it saves to the database
   const handleAccept = useCallback(async (modelId: ModelId) => {
     const response = responses.find((r) => r.modelId === modelId);
     if (!response) return;
@@ -110,15 +124,15 @@ const Index = () => {
       const newSession = await createSession(title, modelId, [
         { role: "user", content: currentPrompt, modelId, timestamp: undefined },
         { role: "assistant", content: response.content, modelId, timestamp: undefined }
-      ]);
+      ], extractedText);
       const safeNewSession = { ...newSession, messages: newSession.messages || [] };
       setSessions((prev) => [safeNewSession, ...prev]);
       setActiveSessionId(safeNewSession.ID);
       setAppState("active-chat");
     } catch (error) {}
-  }, [responses, currentPrompt]);
+  }, [responses, currentPrompt, extractedText]);
 
-  const handleChatMessage = useCallback(async (prompt: string, category: string, extractedText: string | null) => {
+  const handleChatMessage = useCallback(async (prompt: string, category: string, currentExtractedText: string | null) => {
     if (!activeSessionId || !activeSession?.selectedModel) return;
 
     const userMsg: ChatMessage = { role: "user", content: prompt, modelId: activeSession.selectedModel, createdAt: new Date().toISOString(), timestamp: undefined };
@@ -126,7 +140,7 @@ const Index = () => {
     
     setIsLoading(true);
 
-    await streamChatMessage(activeSessionId, activeSession.selectedModel, prompt, category, extractedText, (status, content) => {
+    await streamChatMessage(activeSessionId, activeSession.selectedModel, prompt, category, currentExtractedText, (status, content) => {
         if (status === 'thinking') {
             setIsLoading(true);
         } else if (status === 'chunk' && content) {

@@ -29,8 +29,12 @@ export const fetchSessionMessages = async (sessionId: string) => {
     });
 };
 
-export const createSession = async (title: string, selectedModel: string, initialMessages: any[]) => {
-    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: getUserId(), title, selectedModel, messages: initialMessages }) });
+export const createSession = async (title: string, selectedModel: string, initialMessages: any[], functionalspec?: string | null) => {
+    const res = await fetch(`${BASE_URL}/odata/v4/ai/ChatSessions`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ userId: getUserId(), title, selectedModel, messages: initialMessages, functionalspec }) 
+    });
     return res.json();
 };
 
@@ -42,13 +46,14 @@ export const submitRating = async (userId: string, modelId: string, category: st
     return fetch(`${BASE_URL}/odata/v4/ai/submitRating`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, modelId, category, rating }) });
 };
 
+// UPDATED: Return the full data object instead of just data.text
 export const uploadDocument = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch(`${BASE_URL}/odata/uploadDoc`, { method: 'POST', body: formData });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Upload failed");
-    return data.text;
+    return data; // Returns { text: string, piiList: Array }
 };
 
 export const streamChatMessage = async (
