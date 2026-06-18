@@ -43,7 +43,6 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
     if (finalExtractedText && piiList.length > 0) {
         piiList.forEach(item => {
             if (!item.keep) {
-                // Escape regex characters inside the PII string to prevent errors
                 const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const regex = new RegExp(escapeRegExp(item.value), 'g');
                 finalExtractedText = finalExtractedText!.replace(regex, `[REDACTED_${item.type.toUpperCase()}]`);
@@ -63,20 +62,27 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      
+      // UPDATED: Block files larger than 70KB (71,680 bytes) instantly on the client
+      if (selectedFile.size > 70 * 1024) {
+          alert("File size exceeds the 70KB limit. Please upload a smaller document.");
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+      }
+
       setFile(selectedFile);
       setIsUploading(true);
       try {
         const data = await uploadDocument(selectedFile);
         setExtractedText(data.text);
         
-        // Populate checkboxes, default to NOT keeping the data (keep = false implies Redact)
         if (data.piiList && data.piiList.length > 0) {
             setPiiList(data.piiList.map((p: any) => ({ ...p, keep: false })));
         } else {
             setPiiList([]);
         }
-      } catch (err) {
-        alert("File extraction failed");
+      } catch (err: any) {
+        alert(err.message || "File extraction failed");
         setFile(null);
         setExtractedText(null);
         setPiiList([]);
@@ -102,7 +108,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
       {!minimal && (
         <div className="text-center animate-slide-up w-full flex flex-col items-center shrink-0">
           <h1 className="text-2xl font-semibold text-foreground mb-2">Code Generation</h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">Input your requirements or upload a Functional Spec.</p>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">Input your requirements or upload a Functional Spec (Max 70KB).</p>
         </div>
       )}
 
@@ -142,7 +148,6 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
             )}
           </div>
 
-          {/* PII Interactive Filter UI */}
           {piiList.length > 0 && !minimal && (
             <div className="px-4 py-3 border-b border-primary/10 bg-destructive/5 flex flex-col gap-2 max-h-40 overflow-y-auto">
               <span className="text-xs font-semibold text-destructive flex items-center gap-1">
