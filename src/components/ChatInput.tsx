@@ -64,11 +64,11 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
     if (selectedFile) {
       
       // UPDATED: Block files larger than 70KB (71,680 bytes) instantly on the client
-      if (selectedFile.size > 70 * 1024) {
+      /*if (selectedFile.size > 70 * 1024) {
           alert("File size exceeds the 70KB limit. Please upload a smaller document.");
           if (fileInputRef.current) fileInputRef.current.value = "";
           return;
-      }
+      }*/
 
       setFile(selectedFile);
       setIsUploading(true);
