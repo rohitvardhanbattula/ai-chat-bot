@@ -219,7 +219,7 @@ const Index = () => {
             {appState === "comparison" && <div className="h-full p-4 sm:p-6 bg-muted/20 overflow-hidden"><ComparisonGrid responses={responses} isLoading={isLoading} onAccept={handleAccept} prompt={currentPrompt} /></div>}
             {appState === "active-chat" && activeSession && (
               <div className="h-full overflow-hidden bg-muted/10 pb-2">
-                <ActiveChat modelId={activeSession.selectedModel} messages={(activeSession.messages || []).map(m => ({ ...m, timestamp: m.timestamp || new Date(m.createdAt || Date.now()) }))} onSendMessage={handleChatMessage} onBack={handleNewChat} isLoading={isLoading} />
+                <ActiveChat chatId={activeSession.ID} modelId={activeSession.selectedModel} messages={(activeSession.messages || []).map(m => ({ ...m, timestamp: m.timestamp || new Date(m.createdAt || Date.now()) }))} onSendMessage={handleChatMessage} onBack={handleNewChat} isLoading={isLoading} />
               </div>
             )}
           </div>

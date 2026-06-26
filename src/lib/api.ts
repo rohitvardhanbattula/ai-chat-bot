@@ -109,3 +109,35 @@ export const streamComparison = async (
         }
     } catch (error) { onUpdate('error', 'model is not available at the moment'); }
 };
+
+export const establishConnection = async (sessionId: string, credentials: any) => {
+  // Replace '/odata/v4/ai-service' with your actual CAP service route if different
+  const response = await fetch('/odata/v4/ai/establishConnection', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Include authorization headers here if your frontend requires them for OData calls
+    },
+    body: JSON.stringify({
+      sessionId,
+      url: credentials.url,
+      user: credentials.user,
+      password: credentials.password,
+      client: credentials.client,
+      language: credentials.language
+    }),
+  });
+  
+  if (!response.ok) {
+    let errorMessage = 'Failed to establish connection';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error?.message || errorMessage;
+    } catch (e) {
+      // Fallback if response is not JSON
+    }
+    throw new Error(errorMessage);
+  }
+  
+  return response.json();
+};
