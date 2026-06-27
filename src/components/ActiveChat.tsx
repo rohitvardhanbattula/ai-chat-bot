@@ -6,7 +6,7 @@ import ChatInput from "./ChatInput";
 import RatingPopup from "./RatingPopup";
 import { SAPConnectionModal } from "./SAPConnectionModal";
 import { Button } from "./ui/button";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 interface ActiveChatProps {

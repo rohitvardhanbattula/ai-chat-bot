@@ -13,7 +13,7 @@ export default function RatingPopup({ isOpen, onClose, modelId }: { isOpen: bool
     const { toast } = useToast();
 
     const handleSubmit = async () => {
-        const userId = localStorage.getItem('userId') || 'anonymous';
+        const userId = localStorage.getItem('token') || 'anonymous';
         try {
             await submitRating(userId, modelId, category, rating);
             toast({ title: "Feedback Submitted", description: "Thank you for rating this response!" });
