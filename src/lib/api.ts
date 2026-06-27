@@ -172,19 +172,13 @@ export const authLogout = async () => {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 export const fetchSessions = async () => {
-    const data = await apiFetch(
-        `/odata/v4/ai/ChatSessions?$orderby=createdAt desc`,
-        {},
-        { skipAuth: true }  // ← add this
-    );
+    const data = await apiFetch(`/odata/v4/ai/ChatSessions?$orderby=createdAt desc`);
     return data?.value || [];
 };
 
 export const fetchSessionMessages = async (sessionId: string) => {
     const data = await apiFetch(
-        `/odata/v4/ai/ChatMessages?$filter=session_ID eq '${encodeURIComponent(sessionId)}'&$orderby=createdAt asc`,
-        {},
-        { skipAuth: true }  // ← add this
+        `/odata/v4/ai/ChatMessages?$filter=session_ID eq '${encodeURIComponent(sessionId)}'&$orderby=createdAt asc`
     );
     const messages = data?.value || [];
     return messages.sort((a: any, b: any) => {
@@ -210,14 +204,14 @@ export const createSession = async (
             messages: initialMessages,
             functionalspec: functionalspec ?? null
         })
-    }, { skipAuth: true });  // ← add this
+    });
     return data;
 };
 
 export const deleteSession = async (sessionId: string) => {
     await apiFetch(`/odata/v4/ai/ChatSessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE'
-    }, { skipAuth: true });  // ← add this
+    });
 };
 
 export const renameSession = async (sessionId: string, title: string) => {
@@ -225,7 +219,7 @@ export const renameSession = async (sessionId: string, title: string) => {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ title: title.slice(0, 100) })
-    }, { skipAuth: true });  // ← add this
+    });
 };
 
 // ── Ratings ───────────────────────────────────────────────────────────────────

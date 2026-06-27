@@ -10,12 +10,14 @@ import ComparisonGrid from '@/components/ComparisonGrid';
 import ActiveChat     from '@/components/ActiveChat';
 import Header         from '@/components/Header';
 import { useAutoLogout } from '@/hooks/useAutoLogout';
+import { useToast } from '@/components/ui/use-toast';
 import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
     useAutoLogout(20);
     const navigate = useNavigate();
+    const { toast } = useToast();
 
     const [sessions,         setSessions]         = useState<ChatSession[]>([]);
     const [activeSessionId,  setActiveSessionId]  = useState<string | null>(null);
@@ -35,8 +37,13 @@ const Index = () => {
         try {
             const fetched = await fetchSessions();
             setSessions(fetched.map((s: any) => ({ ...s, messages: s.messages || [] })));
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Index] loadSessions:', err);
+            toast({
+                title: 'Could not load chat sessions',
+                description: err?.message || 'Please refresh the page.',
+                variant: 'destructive'
+            });
         }
     };
 
@@ -67,8 +74,13 @@ const Index = () => {
                 setSessions(prev => prev.map(s =>
                     s.ID === sessionId ? { ...s, messages: messages || [] } : s
                 ));
-            } catch (err) {
+            } catch (err: any) {
                 console.error('[Index] fetchSessionMessages:', err);
+                toast({
+                    title: 'Could not load this conversation',
+                    description: err?.message || 'Please try selecting it again.',
+                    variant: 'destructive'
+                });
             } finally {
                 setIsLoading(false);
             }
@@ -81,8 +93,13 @@ const Index = () => {
             await deleteSession(sessionId);
             setSessions(prev => prev.filter(s => s.ID !== sessionId));
             if (activeSessionId === sessionId) handleNewChat();
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Index] deleteSession:', err);
+            toast({
+                title: 'Could not delete chat',
+                description: err?.message || 'Please try again.',
+                variant: 'destructive'
+            });
         }
     }, [activeSessionId, handleNewChat]);
 
@@ -106,8 +123,13 @@ const Index = () => {
             await renameSession(sessionId, trimmed);
             setSessions(prev => prev.map(s => s.ID === sessionId ? { ...s, title: trimmed } : s));
             setEditingSessionId(null);
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Index] renameSession:', err);
+            toast({
+                title: 'Could not rename chat',
+                description: err?.message || 'Please try again.',
+                variant: 'destructive'
+            });
         }
     }, [editTitle]);
 
@@ -164,8 +186,13 @@ const Index = () => {
             setSessions(prev => [{ ...newSession, messages: newSession.messages || [] }, ...prev]);
             setActiveSessionId(newSession.ID);
             setAppState('active-chat');
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Index] createSession:', err);
+            toast({
+                title: 'Could not start chat',
+                description: err?.message || 'Please try again.',
+                variant: 'destructive'
+            });
         }
     }, [responses, currentPrompt, extractedText]);
 
