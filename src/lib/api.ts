@@ -87,7 +87,7 @@ async function ensureValidToken(): Promise<void> {
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
 function getAuthHeaders(): Record<string, string> {
-    return _accessToken ? { Authorization: `Bearer ${_accessToken}` } : {};
+    return _accessToken ? { 'x-custom-auth': _accessToken } : {};
 }
 
 function extractErrorMessage(data: any, fallback: string): string {
@@ -172,14 +172,20 @@ export const authLogout = async () => {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 export const fetchSessions = async () => {
-    const data = await apiFetch(`/odata/v4/ai/ChatSessions?$orderby=createdAt desc`);
+    const data = await apiFetch('/odata/v4/ai/getChatSessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
     return data?.value || [];
 };
 
 export const fetchSessionMessages = async (sessionId: string) => {
-    const data = await apiFetch(
-        `/odata/v4/ai/ChatMessages?$filter=session_ID eq '${encodeURIComponent(sessionId)}'&$orderby=createdAt asc`
-    );
+    const data = await apiFetch('/odata/v4/ai/getChatMessages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+    });
     const messages = data?.value || [];
     return messages.sort((a: any, b: any) => {
         const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -194,31 +200,36 @@ export const createSession = async (
     title: string, selectedModel: string,
     initialMessages: any[], functionalspec?: string | null
 ) => {
-    const data = await apiFetch('/odata/v4/ai/ChatSessions', {
-        method:  'POST',
+    const data = await apiFetch('/odata/v4/ai/createSession', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-            userId: getStoredUsername(),
-            title:  title.slice(0, 100),
+        body: JSON.stringify({
+            title: title.slice(0, 100),
             selectedModel,
-            messages: initialMessages,
+            messages: initialMessages.map(m => ({
+                role:    m.role,
+                content: m.content,
+                modelId: m.modelId || selectedModel
+            })),
             functionalspec: functionalspec ?? null
         })
     });
-    return data;
+    return data?.value ?? data;
 };
 
 export const deleteSession = async (sessionId: string) => {
-    await apiFetch(`/odata/v4/ai/ChatSessions/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE'
+    await apiFetch('/odata/v4/ai/deleteSession', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
     });
 };
 
 export const renameSession = async (sessionId: string, title: string) => {
-    await apiFetch(`/odata/v4/ai/ChatSessions/${encodeURIComponent(sessionId)}`, {
-        method:  'PATCH',
+    await apiFetch('/odata/v4/ai/renameSession', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ title: title.slice(0, 100) })
+        body: JSON.stringify({ sessionId, title: title.slice(0, 100) })
     });
 };
 

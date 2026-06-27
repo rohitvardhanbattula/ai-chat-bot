@@ -5,10 +5,10 @@ import {
     fetchSessionMessages, streamChatMessage, streamComparison,
     authLogout, getStoredUsername
 } from '@/lib/api';
-import ChatInput      from '@/components/ChatInput';
+import ChatInput from '@/components/ChatInput';
 import ComparisonGrid from '@/components/ComparisonGrid';
-import ActiveChat     from '@/components/ActiveChat';
-import Header         from '@/components/Header';
+import ActiveChat from '@/components/ActiveChat';
+import Header from '@/components/Header';
 import { useAutoLogout } from '@/hooks/useAutoLogout';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X, LogOut } from 'lucide-react';
@@ -19,16 +19,16 @@ const Index = () => {
     const navigate = useNavigate();
     const { toast } = useToast();
 
-    const [sessions,         setSessions]         = useState<ChatSession[]>([]);
-    const [activeSessionId,  setActiveSessionId]  = useState<string | null>(null);
-    const [sidebarOpen,      setSidebarOpen]      = useState(true);
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-    const [editTitle,        setEditTitle]        = useState('');
-    const [appState,         setAppState]         = useState<AppState>('input');
-    const [currentPrompt,    setCurrentPrompt]    = useState('');
-    const [responses,        setResponses]        = useState<ModelResponse[]>([]);
-    const [isLoading,        setIsLoading]        = useState(false);
-    const [extractedText,    setExtractedText]    = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [appState, setAppState] = useState<AppState>('input');
+    const [currentPrompt, setCurrentPrompt] = useState('');
+    const [responses, setResponses] = useState<ModelResponse[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [extractedText, setExtractedText] = useState<string | null>(null);
     const pendingStreamsRef = useRef(0);
 
     useEffect(() => { loadSessions(); }, []);
@@ -180,7 +180,7 @@ const Index = () => {
         const title = currentPrompt.length > 50 ? currentPrompt.slice(0, 50) + '…' : currentPrompt;
         try {
             const newSession = await createSession(title, modelId, [
-                { role: 'user',      content: currentPrompt,    modelId, timestamp: undefined },
+                { role: 'user', content: currentPrompt, modelId, timestamp: undefined },
                 { role: 'assistant', content: response.content, modelId, timestamp: undefined }
             ], extractedText);
             setSessions(prev => [{ ...newSession, messages: newSession.messages || [] }, ...prev]);
@@ -222,7 +222,7 @@ const Index = () => {
                     setIsLoading(false);
                     setSessions(prev => prev.map(s => {
                         if (s.ID !== activeSessionId) return s;
-                        const msgs    = [...(s.messages || [])];
+                        const msgs = [...(s.messages || [])];
                         const lastMsg = msgs[msgs.length - 1];
                         if (lastMsg?.role === 'assistant') {
                             return { ...s, messages: [...msgs.slice(0, -1), { ...lastMsg, content: lastMsg.content + content }] };
@@ -236,6 +236,16 @@ const Index = () => {
                     }));
                 } else if (status === 'done') {
                     setIsLoading(false);
+                    (async () => {
+                        try {
+                            const messages = await fetchSessionMessages(activeSessionId);
+                            setSessions(prev => prev.map(s =>
+                                s.ID === activeSessionId ? { ...s, messages: messages || [] } : s
+                            ));
+                        } catch (err) {
+                            console.error('[Index] refetch messages after stream:', err);
+                        }
+                    })();
                 } else if (status === 'error') {
                     setIsLoading(false);
                     const errMsg: ChatMessage = {
@@ -303,7 +313,7 @@ const Index = () => {
                                             onClick={e => e.stopPropagation()}
                                             onKeyDown={e => {
                                                 e.stopPropagation();
-                                                if (e.key === 'Enter')  saveRename(e, session.ID);
+                                                if (e.key === 'Enter') saveRename(e, session.ID);
                                                 if (e.key === 'Escape') cancelRename(e as any);
                                             }}
                                             maxLength={100}
