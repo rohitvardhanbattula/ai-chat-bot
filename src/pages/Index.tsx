@@ -3,7 +3,8 @@ import { AppState, ChatMessage, ModelId, ModelResponse, ChatSession } from '@/ty
 import {
     fetchSessions, createSession, deleteSession, renameSession,
     fetchSessionMessages, streamChatMessage, streamComparison,
-    authLogout, getStoredUsername
+    authLogout, getStoredUsername,
+    remapConnection,
 } from '@/lib/api';
 import ChatInput from '@/components/ChatInput';
 import ComparisonGrid from '@/components/ComparisonGrid';
@@ -31,6 +32,16 @@ const Index = () => {
     const [extractedText, setExtractedText] = useState<string | null>(null);
     const pendingStreamsRef = useRef(0);
 
+    // ── SAP connection state ───────────────────────────────────────────────
+    // tempConnectionId: a client-generated UUID used when the user connects to
+    // SAP before any DB session exists. As soon as createSession() returns the
+    // real UUID we call remapConnection(tempId → realId) and clear this.
+    const [tempConnectionId, setTempConnectionId] = useState<string | null>(null);
+
+    // connectedSessionIds: set of real DB session UUIDs that currently have an
+    // active SAP bridge connection.
+    const [connectedSessionIds, setConnectedSessionIds] = useState<Set<string>>(new Set());
+
     useEffect(() => { loadSessions(); }, []);
 
     const loadSessions = async () => {
@@ -55,6 +66,8 @@ const Index = () => {
         setCurrentPrompt('');
         setResponses([]);
         setExtractedText(null);
+        // Don't clear tempConnectionId here — user may have already connected SAP
+        // before deciding to start fresh. Let them reuse the temp connection.
     }, []);
 
     const handleLogout = useCallback(async () => {
@@ -92,6 +105,7 @@ const Index = () => {
         try {
             await deleteSession(sessionId);
             setSessions(prev => prev.filter(s => s.ID !== sessionId));
+            setConnectedSessionIds(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
             if (activeSessionId === sessionId) handleNewChat();
         } catch (err: any) {
             console.error('[Index] deleteSession:', err);
@@ -133,6 +147,44 @@ const Index = () => {
         }
     }, [editTitle]);
 
+    // ── SAP connection callbacks ──────────────────────────────────────────
+
+    /**
+     * Called by ChatInput / SAPConnectionModal when a connection succeeds.
+     * In pre-session mode (appState === 'input') the connectedId will be the
+     * tempId we passed down; we record it so handleAccept can remap it.
+     */
+    const handleSapConnected = useCallback((connectedId: string) => {
+        if (appState === 'input' || appState === 'comparison') {
+            // Pre-session: store temp ID, it will be remapped in handleAccept
+            setTempConnectionId(connectedId);
+        } else {
+            // Active chat: connectedId is the real session UUID
+            setConnectedSessionIds(prev => new Set([...prev, connectedId]));
+        }
+    }, [appState]);
+
+    const handleSapDisconnected = useCallback(() => {
+        if (activeSessionId) {
+            setConnectedSessionIds(prev => { const n = new Set(prev); n.delete(activeSessionId); return n; });
+        }
+    }, [activeSessionId]);
+
+    // ── Generate a stable tempId for the pre-session flow ─────────────────
+    // We use a ref so it stays the same across re-renders within one "new chat"
+    // session, and only changes when the user explicitly starts over.
+    const tempIdRef = useRef<string>(crypto.randomUUID());
+    const refreshTempId = useCallback(() => {
+        tempIdRef.current = crypto.randomUUID();
+        setTempConnectionId(null);
+    }, []);
+
+    const handleNewChatWithRefresh = useCallback(() => {
+        handleNewChat();
+        refreshTempId();
+    }, [handleNewChat, refreshTempId]);
+
+    // ── Initial prompt (comparison screen) ───────────────────────────────
     const handleInitialPrompt = useCallback((
         prompt: string, category: string, incomingText: string | null
     ) => {
@@ -174,6 +226,7 @@ const Index = () => {
         });
     }, []);
 
+    // ── Accept a model response → create session, remap SAP if needed ─────
     const handleAccept = useCallback(async (modelId: ModelId) => {
         const response = responses.find(r => r.modelId === modelId);
         if (!response) return;
@@ -183,6 +236,24 @@ const Index = () => {
                 { role: 'user', content: currentPrompt, modelId, timestamp: undefined },
                 { role: 'assistant', content: response.content, modelId, timestamp: undefined }
             ], extractedText);
+
+            // If the user connected SAP before this session existed, migrate the
+            // in-memory bridge from the temp ID to the real session UUID.
+            const currentTempId = tempConnectionId ?? tempIdRef.current;
+            if (currentTempId) {
+                try {
+                    await remapConnection(currentTempId, newSession.ID);
+                    setConnectedSessionIds(prev => new Set([...prev, newSession.ID]));
+                    console.log(`[Index] SAP connection remapped ${currentTempId} → ${newSession.ID}`);
+                } catch (remapErr: any) {
+                    // Non-fatal — the user can reconnect manually
+                    console.warn('[Index] remapConnection failed:', remapErr?.message);
+                } finally {
+                    setTempConnectionId(null);
+                    refreshTempId();
+                }
+            }
+
             setSessions(prev => [{ ...newSession, messages: newSession.messages || [] }, ...prev]);
             setActiveSessionId(newSession.ID);
             setAppState('active-chat');
@@ -194,8 +265,9 @@ const Index = () => {
                 variant: 'destructive'
             });
         }
-    }, [responses, currentPrompt, extractedText]);
+    }, [responses, currentPrompt, extractedText, tempConnectionId, refreshTempId]);
 
+    // ── Chat message handler ──────────────────────────────────────────────
     const handleChatMessage = useCallback(async (
         prompt: string, category: string, currentExtractedText: string | null
     ) => {
@@ -273,7 +345,7 @@ const Index = () => {
                 >
                     <div className="p-4 shrink-0">
                         <button
-                            onClick={handleNewChat}
+                            onClick={handleNewChatWithRefresh}
                             className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 shadow-sm transition-colors"
                         >
                             <Plus className="w-4 h-4" /> New Workspace
@@ -327,6 +399,10 @@ const Index = () => {
                                         <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                             <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
                                             <span className="truncate text-xs">{session.title}</span>
+                                            {/* Green dot for sessions with an active SAP connection */}
+                                            {connectedSessionIds.has(session.ID) && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" title="SAP Connected" />
+                                            )}
                                         </div>
                                         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
                                             <button onClick={e => startRename(e, session)} title="Rename" className="hover:text-primary p-0.5"><Edit2 className="w-3.5 h-3.5" /></button>
@@ -338,7 +414,6 @@ const Index = () => {
                         ))}
                     </div>
 
-                    {/* Logout button at bottom of sidebar */}
                     <div className="p-3 border-t border-border shrink-0">
                         <button
                             onClick={handleLogout}
@@ -370,7 +445,13 @@ const Index = () => {
                         {appState === 'input' && (
                             <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
                                 <div className="m-auto w-full">
-                                    <ChatInput onSubmit={handleInitialPrompt} isLoading={isLoading} />
+                                    <ChatInput
+                                        onSubmit={handleInitialPrompt}
+                                        isLoading={isLoading}
+                                        sapSessionId={tempIdRef.current}
+                                        isSapConnected={!!tempConnectionId}
+                                        onSapConnected={handleSapConnected}
+                                    />
                                 </div>
                             </div>
                         )}
@@ -394,8 +475,11 @@ const Index = () => {
                                         timestamp: m.timestamp || new Date(m.createdAt || Date.now())
                                     }))}
                                     onSendMessage={handleChatMessage}
-                                    onBack={handleNewChat}
+                                    onBack={handleNewChatWithRefresh}
                                     isLoading={isLoading}
+                                    isSapConnected={connectedSessionIds.has(activeSession.ID)}
+                                    onSapConnected={handleSapConnected}
+                                    onSapDisconnected={handleSapDisconnected}
                                 />
                             </div>
                         )}

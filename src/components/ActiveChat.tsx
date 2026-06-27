@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from "react";
-import { ArrowLeft, Star, Copy, Check, Download, Plug } from "lucide-react";
+import { useRef, useEffect, useState, useCallback } from "react";
+import { ArrowLeft, Star, Copy, Check, Download, Plug, WifiOff } from "lucide-react";
 import { ChatMessage, ModelId, MODELS } from "@/types/chat";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ChatInput from "./ChatInput";
@@ -8,6 +8,10 @@ import { SAPConnectionModal } from "./SAPConnectionModal";
 import { Button } from "./ui/button";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { checkConnection } from "@/lib/api";
+
+// How often to ping the SAP connection (ms)
+const SAP_POLL_INTERVAL_MS = 45_000;
 
 interface ActiveChatProps {
   modelId: ModelId;
@@ -16,25 +20,64 @@ interface ActiveChatProps {
   onSendMessage: (prompt: string, category: string, extractedText: string | null) => void;
   onBack: () => void;
   isLoading: boolean;
+  /** Whether a SAP connection was established for this session (lifted from Index). */
+  isSapConnected: boolean;
+  /** Called when a (re-)connection succeeds so Index can update its state. */
+  onSapConnected: (sessionId: string) => void;
+  /** Called when the poll detects the connection has dropped. */
+  onSapDisconnected: () => void;
 }
 
-const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoading }: ActiveChatProps) => {
+const ActiveChat = ({
+  modelId,
+  chatId,
+  messages,
+  onSendMessage,
+  onBack,
+  isLoading,
+  isSapConnected,
+  onSapConnected,
+  onSapDisconnected,
+}: ActiveChatProps) => {
   const model = MODELS[modelId];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [ratingModal, setRatingModal] = useState({ isOpen: false, modelId: '' });
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
 
+  // ── Auto-scroll ──────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  // ── SAP connection polling ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!isSapConnected) return; // nothing to poll if not connected
+
+    const poll = async () => {
+      try {
+        const status = await checkConnection(chatId);
+        if (!status.connected) {
+          console.warn(`[ActiveChat] SAP connection lost for ${chatId}:`, status.message);
+          onSapDisconnected();
+        }
+      } catch (err) {
+        // Network error — don't flip the indicator, it's probably a transient glitch
+        console.warn('[ActiveChat] SAP poll network error:', err);
+      }
+    };
+
+    const timer = setInterval(poll, SAP_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [isSapConnected, chatId, onSapDisconnected]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
   const formatTime = (dateStr?: string | Date) => {
     if (!dateStr) return '';
     try {
-        return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-        return '';
+      return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
     }
   };
 
@@ -45,68 +88,88 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
   };
 
   const handleDownloadPDF = (content: string, dateStr?: string | Date) => {
-      const doc = new jsPDF();
-      const time = formatTime(dateStr);
-      const fileName = `SAP_AI_Code_Gen_${new Date().getTime()}.pdf`;
-      
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text("AnswerThink AI Code Generation", 14, 20);
-      
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
-      doc.text(`Model: ${model?.name || "AI Assistant"} | Time: ${time}`, 14, 28);
-      
-      let yOffset = 38;
-      const parts = content.split("```");
-      
-      parts.forEach((part, index) => {
-          if (index % 2 !== 0) {
-              const codeLines = part.split("\n");
-              const codeContent = codeLines.length > 1 && !codeLines[0].includes(" ") ? codeLines.slice(1).join("\n") : part;
-              
-              autoTable(doc, {
-                  startY: yOffset,
-                  head: [],
-                  body: [[codeContent]],
-                  theme: 'plain',
-                  styles: {
-                      font: "courier",
-                      fontSize: 9,
-                      fillColor: [240, 240, 240],
-                      textColor: [40, 40, 40],
-                      cellPadding: 4,
-                  },
-                  margin: { left: 14, right: 14 },
-                  didDrawPage: (data: any) => {
-                      yOffset = data.cursor.y + 10;
-                  }
-              });
-          } else {
-              if (part.trim() !== "") {
-                   doc.setFont("helvetica", "normal");
-                   doc.setFontSize(10);
-                   doc.setTextColor(0);
-                   const splitText = doc.splitTextToSize(part.trim(), 180);
-                   if (yOffset + (splitText.length * 5) > 280) {
-                       doc.addPage();
-                       yOffset = 20;
-                   }
-                   doc.text(splitText, 14, yOffset);
-                   yOffset += (splitText.length * 5) + 5;
-              }
+    const doc = new jsPDF();
+    const time = formatTime(dateStr);
+    const fileName = `SAP_AI_Code_Gen_${new Date().getTime()}.pdf`;
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("AnswerThink AI Code Generation", 14, 20);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Model: ${model?.name || "AI Assistant"} | Time: ${time}`, 14, 28);
+
+    let yOffset = 38;
+    const parts = content.split("```");
+
+    parts.forEach((part, index) => {
+      if (index % 2 !== 0) {
+        const codeLines = part.split("\n");
+        const codeContent = codeLines.length > 1 && !codeLines[0].includes(" ")
+          ? codeLines.slice(1).join("\n")
+          : part;
+
+        autoTable(doc, {
+          startY: yOffset,
+          head: [],
+          body: [[codeContent]],
+          theme: 'plain',
+          styles: {
+            font: "courier",
+            fontSize: 9,
+            fillColor: [240, 240, 240],
+            textColor: [40, 40, 40],
+            cellPadding: 4,
+          },
+          margin: { left: 14, right: 14 },
+          didDrawPage: (data: any) => {
+            yOffset = data.cursor.y + 10;
           }
-      });
-      
-      const pageCount = (doc.internal as any).getNumberOfPages();
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      for(let i = 1; i <= pageCount; i++) {
-          doc.setPage(i);
-          doc.text(`Generated by AnswerThink Enterprise AI Hub | Page ${i} of ${pageCount}`, 14, 290);
+        });
+      } else {
+        if (part.trim() !== "") {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.setTextColor(0);
+          const splitText = doc.splitTextToSize(part.trim(), 180);
+          if (yOffset + (splitText.length * 5) > 280) {
+            doc.addPage();
+            yOffset = 20;
+          }
+          doc.text(splitText, 14, yOffset);
+          yOffset += (splitText.length * 5) + 5;
+        }
       }
-      doc.save(fileName);
+    });
+
+    const pageCount = (doc.internal as any).getNumberOfPages();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.text(`Generated by AnswerThink Enterprise AI Hub | Page ${i} of ${pageCount}`, 14, 290);
+    }
+    doc.save(fileName);
+  };
+
+  const handleSapConnected = useCallback((sessionId: string) => {
+    onSapConnected(sessionId);
+    setIsConnectionModalOpen(false);
+  }, [onSapConnected]);
+
+  // ── SAP connection badge ─────────────────────────────────────────────────
+  const SapBadge = () => {
+    if (isSapConnected) {
+      return (
+        <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-500/10 border border-green-500/30 rounded px-2 py-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          SAP Live
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -114,7 +177,10 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card mb-2">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-1.5 rounded hover:bg-muted transition-colors border border-transparent hover:border-border">
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded hover:bg-muted transition-colors border border-transparent hover:border-border"
+          >
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </button>
           <div className="h-4 w-[1px] bg-border" />
@@ -122,21 +188,41 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
           <span className="font-semibold text-sm text-foreground">{model?.name || "AI Assistant"}</span>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsConnectionModalOpen(true)}
-          title="Connect to a specific SAP system for this chat"
-        >
-          <Plug className="w-4 h-4 mr-2" />
-          Connect SAP
-        </Button>
+        <div className="flex items-center gap-2">
+          <SapBadge />
+
+          {/* Reconnect prompt when connection was lost */}
+          {!isSapConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsConnectionModalOpen(true)}
+              title="Connect to a specific SAP system for this chat"
+              className="text-xs"
+            >
+              <Plug className="w-3.5 h-3.5 mr-1.5" />
+              Connect SAP
+            </Button>
+          )}
+
+          {/* When connected, still allow reconnecting via a subtle icon button */}
+          {isSapConnected && (
+            <button
+              onClick={() => setIsConnectionModalOpen(true)}
+              title="Reconnect SAP"
+              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <WifiOff className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <SAPConnectionModal
         isOpen={isConnectionModalOpen}
         onClose={() => setIsConnectionModalOpen(false)}
         sessionId={chatId}
+        onConnected={handleSapConnected}
       />
 
       {/* Messages */}
@@ -149,7 +235,7 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
                   {msg.role === "user" ? "You" : model?.name || "Assistant"}
                 </span>
               </div>
-              
+
               {msg.role === "assistant" ? (
                 <div className="text-sm prose prose-invert max-w-none">
                   <MarkdownRenderer content={msg.content} />
@@ -157,42 +243,42 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
               ) : (
                 <p className="text-sm leading-relaxed">{msg.content}</p>
               )}
-              
+
               <div className="flex justify-between items-center mt-3 pt-2 border-t border-border/30">
-                  {msg.role === "assistant" ? (
-                      <div className="flex items-center gap-4">
-                          <button 
-                              onClick={() => setRatingModal({ isOpen: true, modelId: modelId })} 
-                              className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
-                          >
-                              <Star className="w-3 h-3" /> Rate Response
-                          </button>
-                          <button 
-                              onClick={() => handleCopy(msg.content, i)} 
-                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                          >
-                              {copiedIndex === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                              {copiedIndex === i ? "Copied!" : "Copy"}
-                          </button>
-                          <button 
-                              onClick={() => handleDownloadPDF(msg.content, msg.createdAt || msg.timestamp)} 
-                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                          >
-                              <Download className="w-3 h-3" />
-                              Save as PDF
-                          </button>
-                      </div>
-                  ) : (
-                      <div />
-                  )}
-                  <p className="text-[10px] text-muted-foreground ml-auto">
-                    {formatTime(msg.createdAt || msg.timestamp)}
-                  </p>
+                {msg.role === "assistant" ? (
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setRatingModal({ isOpen: true, modelId: modelId })}
+                      className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                    >
+                      <Star className="w-3 h-3" /> Rate Response
+                    </button>
+                    <button
+                      onClick={() => handleCopy(msg.content, i)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                    >
+                      {copiedIndex === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copiedIndex === i ? "Copied!" : "Copy"}
+                    </button>
+                    <button
+                      onClick={() => handleDownloadPDF(msg.content, msg.createdAt || msg.timestamp)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                    >
+                      <Download className="w-3 h-3" />
+                      Save as PDF
+                    </button>
+                  </div>
+                ) : (
+                  <div />
+                )}
+                <p className="text-[10px] text-muted-foreground ml-auto">
+                  {formatTime(msg.createdAt || msg.timestamp)}
+                </p>
               </div>
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-muted border border-border rounded-md px-5 py-4 shadow-sm flex items-center gap-2">
@@ -211,15 +297,23 @@ const ActiveChat = ({ modelId, chatId, messages, onSendMessage, onBack, isLoadin
       </div>
 
       <div className="p-4 border-t border-border bg-card">
-        <ChatInput onSubmit={onSendMessage} isLoading={isLoading} minimal placeholder={`Message ${model?.name || 'AI Assistant'}...`} />
+        <ChatInput
+          onSubmit={onSendMessage}
+          isLoading={isLoading}
+          minimal
+          placeholder={`Message ${model?.name || 'AI Assistant'}...`}
+          sapSessionId={chatId}
+          isSapConnected={isSapConnected}
+          onSapConnected={handleSapConnected}
+        />
       </div>
 
       {ratingModal.isOpen && (
-          <RatingPopup 
-              isOpen={ratingModal.isOpen} 
-              onClose={() => setRatingModal({ isOpen: false, modelId: '' })} 
-              modelId={ratingModal.modelId} 
-          />
+        <RatingPopup
+          isOpen={ratingModal.isOpen}
+          onClose={() => setRatingModal({ isOpen: false, modelId: '' })}
+          modelId={ratingModal.modelId}
+        />
       )}
     </div>
   );

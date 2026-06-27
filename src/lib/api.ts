@@ -156,9 +156,9 @@ async function callAuthAction(action: string, payload: AuthPayload) {
     return data?.value ?? data;
 }
 
-export const authRegister = (payload: AuthPayload) => callAuthAction('register', payload);
+export const authRegister  = (payload: AuthPayload) => callAuthAction('register', payload);
 export const authVerifyOTP = (payload: AuthPayload) => callAuthAction('verifyOTP', payload);
-export const authLogin = (payload: AuthPayload) => callAuthAction('login', payload);
+export const authLogin     = (payload: AuthPayload) => callAuthAction('login', payload);
 
 export const authLogout = async () => {
     const rt = getRefreshToken();
@@ -292,7 +292,6 @@ async function consumeSSE(
     if (response.status === 401) {
         onUpdate('error', 'Session expired. Please refresh the page.');
         clearAllAuth();
-       // window.location.replace('/login');
         return;
     }
 
@@ -349,6 +348,8 @@ export const streamComparison = (
 ) => consumeSSE('/odata/streamComparison', { modelId, prompt, category, extractedText }, onUpdate);
 
 // ── SAP connection ────────────────────────────────────────────────────────────
+
+/** Initial connect. sessionId may be a real DB UUID or a client-generated tempId. */
 export const establishConnection = async (sessionId: string, credentials: {
     url: string; user: string; password: string; client: string; language: string;
 }) => {
@@ -357,5 +358,31 @@ export const establishConnection = async (sessionId: string, credentials: {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ sessionId, ...credentials })
     });
-    return data;
+    return data?.value ?? data;
+};
+
+/**
+ * Move the bridge connection from a temporary pre-session ID to the real DB
+ * session UUID. Call immediately after createSession() succeeds.
+ */
+export const remapConnection = async (tempId: string, newSessionId: string): Promise<string> => {
+    const data = await apiFetch('/odata/v4/ai/remapConnection', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ tempId, newSessionId })
+    });
+    return data?.value ?? data ?? '';
+};
+
+/**
+ * Ping the SAP connection health for a session.
+ * Returns { connected: boolean, message: string }.
+ */
+export const checkConnection = async (sessionId: string): Promise<{ connected: boolean; message: string }> => {
+    const data = await apiFetch('/odata/v4/ai/checkConnection', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sessionId })
+    });
+    return data?.value ?? data ?? { connected: false, message: 'Unknown error' };
 };

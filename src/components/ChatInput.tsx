@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
-import { Send, Zap, Code2, Database, Workflow, AlertCircle, Paperclip, X } from 'lucide-react';
+import { Send, Zap, Code2, Database, Workflow, AlertCircle, Paperclip, X, Plug } from 'lucide-react';
 import { uploadDocument } from '@/lib/api';
+import { SAPConnectionModal } from './SAPConnectionModal';
 
 interface ChatInputProps {
     onSubmit: (prompt: string, category: string, extractedText: string | null) => void;
@@ -8,6 +9,22 @@ interface ChatInputProps {
     minimal?: boolean;
     placeholder?: string;
     isLimitReached?: boolean;
+    /**
+     * The session ID (or tempId) to use when connecting to SAP.
+     * Required when minimal=true (active chat mode).
+     * In pre-session mode Index.tsx supplies a client-generated tempId.
+     */
+    sapSessionId?: string;
+    /**
+     * Whether a SAP connection is currently active for this session.
+     * Controlled externally so Index.tsx / ActiveChat can manage the source of truth.
+     */
+    isSapConnected?: boolean;
+    /**
+     * Called when a connection is successfully established so the parent
+     * can record the connected state and the ID that was used.
+     */
+    onSapConnected?: (sessionId: string) => void;
 }
 
 interface PiiItem {
@@ -26,7 +43,16 @@ const PROMPT_TEMPLATES = [
 const CATEGORIES = ['abap-simple', 'abap-complex'] as const;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB — must match backend
 
-const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }: ChatInputProps) => {
+const ChatInput = ({
+    onSubmit,
+    isLoading,
+    minimal,
+    placeholder,
+    isLimitReached,
+    sapSessionId,
+    isSapConnected = false,
+    onSapConnected,
+}: ChatInputProps) => {
     const [input,          setInput]         = useState('');
     const [category,       setCategory]      = useState<string>(CATEGORIES[0]);
     const [file,           setFile]          = useState<File | null>(null);
@@ -34,6 +60,7 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
     const [extractedText,  setExtractedText] = useState<string | null>(null);
     const [piiList,        setPiiList]       = useState<PiiItem[]>([]);
     const [uploadError,    setUploadError]   = useState<string | null>(null);
+    const [isSapModalOpen, setIsSapModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isBusy = isLoading || isUploading || !!isLimitReached;
@@ -43,7 +70,6 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
         let masked = extractedText;
         for (const item of piiList) {
             if (!item.keep) {
-                // Escape regex special characters in the PII value
                 const escaped = item.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 masked = masked.replace(new RegExp(escaped, 'g'), `[REDACTED_${item.type.toUpperCase()}]`);
             }
@@ -108,6 +134,19 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
         setPiiList(prev => prev.map((p, i) => i === index ? { ...p, keep: !p.keep } : p));
     }, []);
 
+    const handleSapConnected = useCallback((connectedSessionId: string) => {
+        onSapConnected?.(connectedSessionId);
+        setIsSapModalOpen(false);
+    }, [onSapConnected]);
+
+    // SAP connection status dot
+    const SapStatusDot = () => (
+        <span
+            title={isSapConnected ? 'SAP Connected' : 'SAP Not Connected'}
+            className={`inline-block w-2 h-2 rounded-full shrink-0 ${isSapConnected ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+        />
+    );
+
     return (
         <div className={minimal ? 'w-full' : 'flex flex-col items-center gap-5 sm:gap-6 w-full max-w-3xl mx-auto py-4'}>
             {!minimal && (
@@ -149,6 +188,24 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
                         >
                             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
+
+                        {/* SAP Connect button — shown whenever a sapSessionId is available */}
+                        {sapSessionId && (
+                            <button
+                                type="button"
+                                onClick={() => setIsSapModalOpen(true)}
+                                className={`text-xs flex items-center gap-1.5 transition-colors px-2 py-1 rounded border
+                                    ${isSapConnected
+                                        ? 'text-green-600 border-green-500/40 bg-green-500/10 hover:bg-green-500/20'
+                                        : 'text-muted-foreground border-border hover:text-primary hover:border-primary/40'
+                                    }`}
+                                title={isSapConnected ? 'SAP connected — click to reconnect' : 'Connect to SAP system'}
+                            >
+                                <Plug className="w-3.5 h-3.5" />
+                                <SapStatusDot />
+                                {isSapConnected ? 'SAP Connected' : 'Connect SAP'}
+                            </button>
+                        )}
 
                         {!minimal && (
                             <>
@@ -266,6 +323,16 @@ const ChatInput = ({ onSubmit, isLoading, minimal, placeholder, isLimitReached }
                         </button>
                     ))}
                 </div>
+            )}
+
+            {/* SAP Connection Modal */}
+            {sapSessionId && (
+                <SAPConnectionModal
+                    isOpen={isSapModalOpen}
+                    onClose={() => setIsSapModalOpen(false)}
+                    sessionId={sapSessionId}
+                    onConnected={handleSapConnected}
+                />
             )}
         </div>
     );
