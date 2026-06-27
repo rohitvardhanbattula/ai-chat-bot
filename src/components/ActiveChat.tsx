@@ -1,11 +1,9 @@
-import { useRef, useEffect, useState, useCallback } from "react";
-import { ArrowLeft, Star, Copy, Check, Download, Plug, WifiOff } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import { ArrowLeft, Star, Copy, Check, Download } from "lucide-react";
 import { ChatMessage, ModelId, MODELS } from "@/types/chat";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ChatInput from "./ChatInput";
 import RatingPopup from "./RatingPopup";
-import { SAPConnectionModal } from "./SAPConnectionModal";
-import { Button } from "./ui/button";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { checkConnection } from "@/lib/api";
@@ -43,7 +41,6 @@ const ActiveChat = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [ratingModal, setRatingModal] = useState({ isOpen: false, modelId: '' });
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
 
   // ── Auto-scroll ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -154,11 +151,6 @@ const ActiveChat = ({
     doc.save(fileName);
   };
 
-  const handleSapConnected = useCallback((sessionId: string) => {
-    onSapConnected(sessionId);
-    setIsConnectionModalOpen(false);
-  }, [onSapConnected]);
-
   // ── SAP connection badge ─────────────────────────────────────────────────
   const SapBadge = () => {
     if (isSapConnected) {
@@ -189,41 +181,10 @@ const ActiveChat = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Connect / reconnect SAP from the message toolbar below — this badge is status-only. */}
           <SapBadge />
-
-          {/* Reconnect prompt when connection was lost */}
-          {!isSapConnected && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsConnectionModalOpen(true)}
-              title="Connect to a specific SAP system for this chat"
-              className="text-xs"
-            >
-              <Plug className="w-3.5 h-3.5 mr-1.5" />
-              Connect SAP
-            </Button>
-          )}
-
-          {/* When connected, still allow reconnecting via a subtle icon button */}
-          {isSapConnected && (
-            <button
-              onClick={() => setIsConnectionModalOpen(true)}
-              title="Reconnect SAP"
-              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <WifiOff className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
-
-      <SAPConnectionModal
-        isOpen={isConnectionModalOpen}
-        onClose={() => setIsConnectionModalOpen(false)}
-        sessionId={chatId}
-        onConnected={handleSapConnected}
-      />
 
       {/* Messages */}
       <div className="flex-1 overflow-auto px-6 py-4 space-y-6">
@@ -304,7 +265,7 @@ const ActiveChat = ({
           placeholder={`Message ${model?.name || 'AI Assistant'}...`}
           sapSessionId={chatId}
           isSapConnected={isSapConnected}
-          onSapConnected={handleSapConnected}
+          onSapConnected={onSapConnected}
         />
       </div>
 
