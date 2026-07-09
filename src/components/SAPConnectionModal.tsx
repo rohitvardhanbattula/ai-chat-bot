@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { useToast } from '../hooks/use-toast';
-import { establishConnection } from '../lib/api';
+import { establishConnection, fetchDestinations } from '../lib/api';
+
+interface Destination {
+  ID: string;
+  name: string;
+  description?: string;
+}
 
 interface SAPConnectionModalProps {
   isOpen: boolean;
@@ -33,17 +40,45 @@ export function SAPConnectionModal({
   onConnected,
 }: SAPConnectionModalProps) {
   const [loading, setLoading] = useState(false);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [destinationsLoading, setDestinationsLoading] = useState(false);
+  const [destinationsError, setDestinationsError] = useState<string | null>(null);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    url: '',
+    destinationName: '',
     user: '',
     password: '',
     client: '100',
     language: 'EN'
   });
 
+  // Load the active destination names whenever the dialog opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setDestinationsLoading(true);
+    setDestinationsError(null);
+    fetchDestinations()
+      .then(list => {
+        if (cancelled) return;
+        setDestinations(list);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        setDestinationsError(err.message || 'Could not load destinations.');
+      })
+      .finally(() => {
+        if (!cancelled) setDestinationsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.destinationName) {
+      toast({ title: 'Select a destination', description: 'Please choose a destination before connecting.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     try {
       await establishConnection(sessionId, formData);
@@ -70,19 +105,40 @@ export function SAPConnectionModal({
         <DialogHeader>
           <DialogTitle>Connect to SAP System</DialogTitle>
           <DialogDescription>
-            Enter your connection details for this specific chat. Credentials are securely held in memory and never saved to the database.
+            Choose the destination for this chat and enter your SAP credentials. Credentials are securely held in memory and never saved to the database.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="url">SAP URL</Label>
-            <Input
-              id="url"
-              required
-              value={formData.url}
-              onChange={e => setFormData({ ...formData, url: e.target.value })}
-              placeholder="https://..."
-            />
+            <Label htmlFor="destination">Destination</Label>
+            <Select
+              value={formData.destinationName}
+              onValueChange={value => setFormData({ ...formData, destinationName: value })}
+              disabled={destinationsLoading || !!destinationsError}
+            >
+              <SelectTrigger id="destination">
+                <SelectValue
+                  placeholder={
+                    destinationsLoading
+                      ? 'Loading destinations…'
+                      : destinationsError
+                        ? 'Could not load destinations'
+                        : 'Select a destination'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {destinations.map(dest => (
+                  <SelectItem key={dest.ID} value={dest.name}>
+                    {dest.name}
+                    {dest.description ? ` — ${dest.description}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {destinationsError && (
+              <p className="text-sm text-destructive">{destinationsError}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="user">SAP User</Label>
@@ -128,7 +184,7 @@ export function SAPConnectionModal({
             <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || !formData.destinationName}>
               {loading ? 'Connecting...' : 'Establish Connection'}
             </Button>
           </DialogFooter>

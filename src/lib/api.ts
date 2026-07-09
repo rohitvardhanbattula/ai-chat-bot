@@ -349,9 +349,19 @@ export const streamComparison = (
 
 // ── SAP connection ────────────────────────────────────────────────────────────
 
+/** Active destination names for the "Connect to SAP System" dropdown. */
+export const fetchDestinations = async (): Promise<Array<{ ID: string; name: string; description?: string }>> => {
+    const data = await apiFetch('/odata/v4/ai/getDestinations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
+    return data?.value || [];
+};
+
 /** Initial connect. sessionId may be a real DB UUID or a client-generated tempId. */
 export const establishConnection = async (sessionId: string, credentials: {
-    url: string; user: string; password: string; client: string; language: string;
+    destinationName: string; user: string; password: string; client: string; language: string;
 }) => {
     const data = await apiFetch('/odata/v4/ai/establishConnection', {
         method:  'POST',
