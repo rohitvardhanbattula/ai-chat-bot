@@ -254,7 +254,18 @@ const Index = () => {
                 }
             }
 
-            setSessions(prev => [{ ...newSession, messages: newSession.messages || [] }, ...prev]);
+            // Backend now returns the just-inserted messages, but fetch explicitly
+            // as a safety net in case that ever regresses (mirrors handleSelectSession).
+            let initialMessages = newSession.messages || [];
+            if (initialMessages.length === 0) {
+                try {
+                    initialMessages = await fetchSessionMessages(newSession.ID);
+                } catch (fetchErr) {
+                    console.error('[Index] fetchSessionMessages after createSession:', fetchErr);
+                }
+            }
+
+            setSessions(prev => [{ ...newSession, messages: initialMessages }, ...prev]);
             setActiveSessionId(newSession.ID);
             setAppState('active-chat');
         } catch (err: any) {
@@ -266,7 +277,6 @@ const Index = () => {
             });
         }
     }, [responses, currentPrompt, extractedText, tempConnectionId, refreshTempId]);
-
     // ── Chat message handler ──────────────────────────────────────────────
     const handleChatMessage = useCallback(async (
         prompt: string, category: string, currentExtractedText: string | null
