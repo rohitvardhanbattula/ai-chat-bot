@@ -40,7 +40,7 @@ const PROMPT_TEMPLATES = [
     { icon: Zap,      label: 'Fiori Elements',        prompt: 'Generate a List Report Fiori Elements app with custom annotations' },
 ] as const;
 
-const CATEGORIES = ['abap-simple', 'abap-complex', 'general'] as const;
+const CATEGORIES = ['general', 'abap-simple', 'abap-complex'] as const;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB — must match backend
 
 const ChatInput = ({
