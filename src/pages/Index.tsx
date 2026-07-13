@@ -239,14 +239,16 @@ const Index = () => {
 
             // If the user connected SAP before this session existed, migrate the
             // in-memory bridge from the temp ID to the real session UUID.
-            const currentTempId = tempConnectionId ?? tempIdRef.current;
+            const currentTempId = tempConnectionId; // only real connections, no ref fallback
             if (currentTempId) {
                 try {
-                    await remapConnection(currentTempId, newSession.ID);
-                    setConnectedSessionIds(prev => new Set([...prev, newSession.ID]));
-                    console.log(`[Index] SAP connection remapped ${currentTempId} → ${newSession.ID}`);
-                } catch (remapErr: any) {
-                    // Non-fatal — the user can reconnect manually
+                    const result = await remapConnection(currentTempId, newSession.ID);
+                    // remapConnection resolves 'no-op: tempId had no active session' on a
+                    // no-op instead of throwing — only mark connected if it actually remapped.
+                    if (!result?.startsWith('no-op')) {
+                        setConnectedSessionIds(prev => new Set([...prev, newSession.ID]));
+                    }
+                } catch (remapErr) {
                     console.warn('[Index] remapConnection failed:', remapErr?.message);
                 } finally {
                     setTempConnectionId(null);
