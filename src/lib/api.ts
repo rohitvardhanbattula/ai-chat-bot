@@ -344,8 +344,9 @@ export const streamChatMessage = (
 
 export const streamComparison = (
     modelId: string, prompt: string, category: string,
-    extractedText: string | null, onUpdate: StreamCallback
-) => consumeSSE('/odata/streamComparison', { modelId, prompt, category, extractedText }, onUpdate);
+    extractedText: string | null, onUpdate: StreamCallback,
+    connectionId?: string | null
+) => consumeSSE('/odata/streamComparison', { modelId, prompt, category, extractedText, connectionId }, onUpdate);
 
 // ── SAP connection ────────────────────────────────────────────────────────────
 

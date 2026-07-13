@@ -222,9 +222,9 @@ const Index = () => {
                 } else if (status === 'done') {
                     checkDone();
                 }
-            });
+            }, tempConnectionId);
         });
-    }, []);
+    }, [tempConnectionId]);
 
     // ── Accept a model response → create session, remap SAP if needed ─────
     const handleAccept = useCallback(async (modelId: ModelId) => {
