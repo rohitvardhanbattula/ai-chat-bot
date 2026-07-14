@@ -43,12 +43,18 @@ const ComparisonGrid = ({ responses, isLoading, onAccept, prompt }: ComparisonGr
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {MODEL_ORDER.map((modelId) => {
           const response = responses.find((r) => r.modelId === modelId);
+          // Each card tracks its OWN loading state (no response yet for
+          // THIS modelId) rather than the shared `isLoading` flag, which
+          // flips to false as soon as the fastest model's first chunk
+          // arrives — that was hiding the "Thinking..." indicator for
+          // slower models (e.g. Claude) even while they were still
+          // actively streaming/running tool calls.
           return (
             <ModelCard
               key={modelId}
               modelId={modelId}
               response={response}
-              isLoading={isLoading && !response}
+              isLoading={!response}
               onAccept={onAccept}
             />
           );

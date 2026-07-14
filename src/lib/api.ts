@@ -30,6 +30,23 @@ export function isAccessTokenValid(): boolean {
     return !!_accessToken && Date.now() < _accessTokenExpiresAt;
 }
 
+/**
+ * Decode the userId ('sub' claim) out of the current access token.
+ * This is a plain base64 decode for display/attribution purposes only —
+ * it is NOT a signature check, and must never be trusted for authorization
+ * (the backend independently re-verifies the token on every request).
+ */
+export function getUserId(): string | null {
+    if (!_accessToken) return null;
+    try {
+        const payloadB64 = _accessToken.split('.')[1];
+        const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
+        return payload.sub || null;
+    } catch {
+        return null;
+    }
+}
+
 // ── Refresh token (localStorage) ──────────────────────────────────────────────
 const REFRESH_KEY  = 'refreshToken';
 const USERNAME_KEY = 'username';

@@ -2,15 +2,22 @@ import { useNavigate } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { authLogout, getStoredUsername } from '@/lib/api';
 
 const Header = () => {
     const navigate = useNavigate();
-    const username = localStorage.getItem('username') || 'U';
+    const username = getStoredUsername() || 'U';
 
-    const handleLogout = () => {
-        localStorage.removeItem('token'); // Clear token
-        localStorage.removeItem('username');
-        navigate('/login');
+    const handleLogout = async () => {
+        // NOTE: previously this only did localStorage.removeItem('token'/'username'),
+        // which didn't match the actual storage keys ('refreshToken'/'username')
+        // and never called the backend to revoke the refresh token or cleared the
+        // in-memory access token. That left the refresh token valid indefinitely
+        // and isLoggedIn() still true, so navigating back to "/" after clicking
+        // this Logout button silently signed the user back in. Route through the
+        // same authLogout() used by the sidebar's Sign Out button instead.
+        try { await authLogout(); } catch { /* best-effort */ }
+        navigate('/login', { replace: true });
     };
 
     return (

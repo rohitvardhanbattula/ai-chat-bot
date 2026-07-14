@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { submitRating } from '@/lib/api';
+import { submitRating, getUserId } from '@/lib/api';
 import { useToast } from "@/components/ui/use-toast";
 
 const CATEGORIES = ["Reports", "Forms", "Interfaces", "Workflow", "Enhancements", "CDS views", "RAP", "CAP", "BTP", "CPI", "General ABAP"];
@@ -13,7 +13,7 @@ export default function RatingPopup({ isOpen, onClose, modelId }: { isOpen: bool
     const { toast } = useToast();
 
     const handleSubmit = async () => {
-        const userId = localStorage.getItem('token') || 'anonymous';
+        const userId = getUserId() || 'anonymous';
         try {
             await submitRating(userId, modelId, category, rating);
             toast({ title: "Feedback Submitted", description: "Thank you for rating this response!" });
