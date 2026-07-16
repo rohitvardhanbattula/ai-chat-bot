@@ -13,6 +13,8 @@ import Header from '@/components/Header';
 import { useAutoLogout } from '@/hooks/useAutoLogout';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, MessageSquare, Trash2, Edit2, PanelLeftClose, PanelLeftOpen, Check, X, LogOut } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
@@ -30,6 +32,7 @@ const Index = () => {
     const [responses, setResponses] = useState<ModelResponse[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [extractedText, setExtractedText] = useState<string | null>(null);
+    const [showLimitPopup, setShowLimitPopup] = useState(false);
     const pendingStreamsRef = useRef(0);
 
     // ── SAP connection state ───────────────────────────────────────────────
@@ -212,7 +215,7 @@ const Index = () => {
                         return [...prev, { modelId, content, latency: 0, error: '' }];
                     });
                 } else if (status === 'error') {
-                    const errContent = 'model is not available at the moment';
+                    const errContent = content || 'model is not available at the moment';
                     setResponses(prev => {
                         const exists = prev.find(r => r.modelId === modelId);
                         if (exists) return prev.map(r => r.modelId === modelId ? { ...r, content: errContent } : r);
@@ -332,8 +335,16 @@ const Index = () => {
                     })();
                 } else if (status === 'error') {
                     setIsLoading(false);
+                    // Detect the prompt-limit error from the backend and show a
+                    // dedicated popup instead of a generic error message in chat.
+                    const isLimitError = content?.includes('Maximum prompt limit') ||
+                        content?.includes('start a new chat');
+                    if (isLimitError) {
+                        setShowLimitPopup(true);
+                        return;
+                    }
                     const errMsg: ChatMessage = {
-                        role: 'assistant', content: 'model is not available at the moment',
+                        role: 'assistant', content: content || 'An error occurred. Please try again.',
                         modelId: activeSession.selectedModel,
                         createdAt: new Date().toISOString(), timestamp: undefined
                     };
@@ -347,6 +358,27 @@ const Index = () => {
 
     return (
         <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">
+
+            {/* ── Prompt-limit popup ─────────────────────────────────────────── */}
+            <Dialog open={showLimitPopup} onOpenChange={setShowLimitPopup}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Message Limit Reached</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground py-2">
+                        You've reached the maximum of 20 messages for this chat session.
+                        Please start a new workspace to continue.
+                    </p>
+                    <DialogFooter className="flex gap-2">
+                        <Button variant="outline" onClick={() => setShowLimitPopup(false)}>
+                            Dismiss
+                        </Button>
+                        <Button onClick={() => { setShowLimitPopup(false); handleNewChatWithRefresh(); }}>
+                            Start New Workspace
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <Header />
             <div className="flex flex-1 overflow-hidden">
 
