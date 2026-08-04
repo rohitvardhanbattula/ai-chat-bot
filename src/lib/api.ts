@@ -177,6 +177,9 @@ export const authRegister  = (payload: AuthPayload) => callAuthAction('register'
 export const authVerifyOTP = (payload: AuthPayload) => callAuthAction('verifyOTP', payload);
 export const authLogin     = (payload: AuthPayload) => callAuthAction('login', payload);
 
+export const authForgotPassword = (payload: AuthPayload) => callAuthAction('forgotPassword', payload);
+export const authResetPassword  = (payload: AuthPayload) => callAuthAction('resetPassword', payload);
+
 export const authLogout = async () => {
     const rt = getRefreshToken();
     if (rt) {

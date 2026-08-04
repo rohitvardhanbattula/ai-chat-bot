@@ -84,11 +84,81 @@ const ActiveChat = ({
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  /**
+   * Strip markdown syntax from a prose block so jsPDF renders clean plain text.
+   * Handles: bold/italic, inline code, links, images, headings, horizontal rules,
+   * bullet/numbered lists, blockquotes, HTML entities, trailing whitespace,
+   * and emoji/non-Latin-1 Unicode characters that corrupt jsPDF's default font.
+   */
+  const stripMarkdown = (text: string): string => {
+    return text
+      // HTML entities → real characters (fixes &*&S&t&a&t&u&s&:& style corruption)
+      .replace(/&amp;/g,  '&')
+      .replace(/&lt;/g,   '<')
+      .replace(/&gt;/g,   '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g,  "'")
+      .replace(/&nbsp;/g, ' ')
+      // Headings (### Heading → Heading)
+      .replace(/^#{1,6}\s+/gm, '')
+      // Bold + italic (***text*** or ___text___)
+      .replace(/\*{3}(.+?)\*{3}/g, '$1')
+      .replace(/_{3}(.+?)_{3}/g,   '$1')
+      // Bold (**text** or __text__)
+      .replace(/\*{2}(.+?)\*{2}/g, '$1')
+      .replace(/_{2}(.+?)_{2}/g,   '$1')
+      // Italic (*text* or _text_) — only when surrounded by word boundaries to
+      // avoid stripping lone * used as bullet points
+      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1')
+      .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g,       '$1')
+      // Inline code (`code`)
+      .replace(/`([^`]+)`/g, '$1')
+      // Images ![alt](url) → alt text
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      // Links [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // Blockquotes (> quote)
+      .replace(/^>\s?/gm, '')
+      // Horizontal rules
+      .replace(/^[-*_]{3,}\s*$/gm, '─────────────────────')
+      // Bullet lists (* item  /  - item  /  + item)
+      .replace(/^[\s]*[-*+]\s+/gm, '• ')
+      // Numbered lists (1. item)
+      .replace(/^[\s]*\d+\.\s+/gm, (match) => match.trimStart())
+      // Strikethrough (~~text~~)
+      .replace(/~~(.+?)~~/g, '$1')
+      // Trailing spaces on each line
+      .replace(/[ \t]+$/gm, '')
+      // Collapse 3+ blank lines to 2
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      // ── Strip emoji and non-Latin-1 Unicode ──────────────────────────────
+      // jsPDF's built-in helvetica font uses single-byte Latin-1 encoding.
+      // Multi-byte Unicode codepoints (emoji, special symbols) corrupt the byte
+      // stream and garble all surrounding text in the PDF output.
+      // Emoji ranges
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+      // Miscellaneous symbols (☀ ☁ ★ etc.)
+      .replace(/[\u{2600}-\u{26FF}]/gu, '')
+      // Dingbats (✂ ✈ ✉ etc.)
+      .replace(/[\u{2700}-\u{27BF}]/gu, '')
+      // Supplemental symbols and pictographs
+      .replace(/[\u{1F900}-\u{1F9FF}]/gu, '')
+      // Symbols and pictographs extended-A
+      .replace(/[\u{1FA00}-\u{1FAFF}]/gu, '')
+      // Any remaining non-Latin-1 character (catch-all)
+      .replace(/[^\x00-\xFF]/gu, '');
+  };
+
   const handleDownloadPDF = (content: string, dateStr?: string | Date) => {
     const doc = new jsPDF();
     const time = formatTime(dateStr);
     const fileName = `SAP_AI_Code_Gen_${new Date().getTime()}.pdf`;
+    const PAGE_WIDTH   = 182; // printable width (210 – 14 margin × 2)
+    const PAGE_BOTTOM  = 280; // leave room for footer
+    const FOOTER_Y     = 290;
 
+    // ── Header ──────────────────────────────────────────────────────────────
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
     doc.text("AnswerThink AI Code Generation", 14, 20);
@@ -97,57 +167,79 @@ const ActiveChat = ({
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
     doc.text(`Model: ${model?.name || "AI Assistant"} | Time: ${time}`, 14, 28);
+    doc.setTextColor(0);
 
     let yOffset = 38;
+
+    // ── Split on code fences, alternate prose / code ─────────────────────
     const parts = content.split("```");
 
     parts.forEach((part, index) => {
       if (index % 2 !== 0) {
-        const codeLines = part.split("\n");
-        const codeContent = codeLines.length > 1 && !codeLines[0].includes(" ")
-          ? codeLines.slice(1).join("\n")
-          : part;
+        // ── Code block ────────────────────────────────────────────────────
+        const codeLines   = part.split("\n");
+        // First line is often the language tag (e.g. "abap", "js") — strip it
+        const codeContent = (codeLines.length > 1 && !codeLines[0].trim().includes(" "))
+          ? codeLines.slice(1).join("\n").trimEnd()
+          : part.trimEnd();
 
         autoTable(doc, {
           startY: yOffset,
-          head: [],
-          body: [[codeContent]],
-          theme: 'plain',
+          head:   [],
+          body:   [[codeContent]],
+          theme:  'plain',
           styles: {
-            font: "courier",
-            fontSize: 9,
-            fillColor: [240, 240, 240],
-            textColor: [40, 40, 40],
+            font:        "courier",
+            fontSize:    9,
+            fillColor:   [240, 240, 240],
+            textColor:   [40, 40, 40],
             cellPadding: 4,
           },
           margin: { left: 14, right: 14 },
           didDrawPage: (data: any) => {
-            yOffset = data.cursor.y + 10;
-          }
+            yOffset = (data.cursor?.y ?? yOffset) + 10;
+          },
         });
+        // didDrawPage gives us the final cursor; add a small gap after the table
+        yOffset += 6;
+
       } else {
-        if (part.trim() !== "") {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
-          doc.setTextColor(0);
-          const splitText = doc.splitTextToSize(part.trim(), 180);
-          if (yOffset + (splitText.length * 5) > 280) {
+        // ── Prose block — strip markdown before rendering ─────────────────
+        const cleanText = stripMarkdown(part);
+        if (!cleanText) return;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(0);
+
+        // Split long prose into lines that fit the page width
+        const lines: string[] = doc.splitTextToSize(cleanText, PAGE_WIDTH);
+
+        for (const line of lines) {
+          if (yOffset > PAGE_BOTTOM) {
             doc.addPage();
             yOffset = 20;
           }
-          doc.text(splitText, 14, yOffset);
-          yOffset += (splitText.length * 5) + 5;
+          doc.text(line, 14, yOffset);
+          yOffset += 6; // line height
         }
+        yOffset += 4; // paragraph gap after prose block
       }
     });
 
+    // ── Footer on every page ──────────────────────────────────────────────
     const pageCount = (doc.internal as any).getNumberOfPages();
     doc.setFontSize(8);
     doc.setTextColor(150);
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.text(`Generated by AnswerThink Enterprise AI Hub | Page ${i} of ${pageCount}`, 14, 290);
+      doc.text(
+        `Generated by AnswerThink Enterprise AI Hub | Page ${i} of ${pageCount}`,
+        14,
+        FOOTER_Y
+      );
     }
+
     doc.save(fileName);
   };
 
@@ -232,7 +324,7 @@ const ActiveChat = ({
                 ) : (
                   <div />
                 )}
-                <p className="text-[10px] text-muted-foreground ml-auto">
+                <p className="text[10px] text-muted-foreground ml-auto">
                   {formatTime(msg.createdAt || msg.timestamp)}
                 </p>
               </div>
