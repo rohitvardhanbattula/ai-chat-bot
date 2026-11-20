@@ -51,3 +51,45 @@ export interface ChatSession {
 }
 
 export type AppState = 'input' | 'comparison' | 'active-chat';
+
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+export type AttachmentKind = 'pdf' | 'docx' | 'xlsx' | 'csv';
+
+export interface SpreadsheetSheetMeta {
+    name:      string;
+    /** Data rows read (the header row is not counted). */
+    rows:      number;
+    columns:   number;
+    truncated: boolean;
+}
+
+/** What the backend learned while extracting text from an uploaded file. */
+export interface UploadMeta {
+    kind:          AttachmentKind;
+    /** Length of the extracted text sent to the model. */
+    chars:         number;
+    /** True when the file was larger than what the backend will read. */
+    truncated:     boolean;
+    pages?:        number;
+    sheets?:       SpreadsheetSheetMeta[];
+    hiddenSheets?: number;
+}
+
+export interface PiiFinding {
+    type:  string;
+    value: string;
+}
+
+/** A PII finding plus the user's decision: keep = let the AI see it, otherwise it is redacted. */
+export interface PiiItem extends PiiFinding {
+    keep: boolean;
+}
+
+export interface UploadResult {
+    text:         string;
+    piiList:      PiiFinding[];
+    /** Findings beyond the review list that the server already redacted. */
+    piiOverflow?: number;
+    meta?:        UploadMeta;
+}

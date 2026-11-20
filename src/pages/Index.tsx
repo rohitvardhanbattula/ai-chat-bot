@@ -511,7 +511,9 @@ const Index = () => {
                         )}
                         {appState === 'active-chat' && activeSession && (
                             <div className="h-full overflow-hidden bg-muted/10 pb-2">
+                                {/* key = session id so an attachment (and its PII choices) never leaks into another chat */}
                                 <ActiveChat
+                                    key={activeSession.ID}
                                     chatId={activeSession.ID}
                                     modelId={activeSession.selectedModel}
                                     messages={(activeSession.messages || []).map(m => ({

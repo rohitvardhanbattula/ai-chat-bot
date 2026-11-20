@@ -9,6 +9,8 @@
  *   5. logout / 401 on refresh → clear everything
  */
 
+import type { UploadResult } from '@/types/chat';
+
 const BASE_URL = '';
 
 // ── In-memory access token (never persisted) ──────────────────────────────────
@@ -109,6 +111,7 @@ function getAuthHeaders(): Record<string, string> {
 
 function extractErrorMessage(data: any, fallback: string): string {
     return (
+        (typeof data?.error === 'string' ? data.error : undefined) ||   // Express routes: { error: "message" }
         data?.error?.message ||
         data?.error?.innererror?.message ||
         data?.message ||
@@ -265,94 +268,177 @@ export const submitRating = async (
 };
 
 // ── Document upload ───────────────────────────────────────────────────────────
-export const uploadDocument = async (file: File): Promise<{ text: string; piiList: any[] }> => {
-    await ensureValidToken();
-    const formData = new FormData();
-    formData.append('file', file);
+const UPLOAD_TIMEOUT_MS = 90_000;
 
-    let res: Response;
-    try {
-        res = await fetch(`${BASE_URL}/odata/uploadDoc`, {
+function uploadErrorMessage(status: number, serverMessage?: string): string {
+    if (serverMessage) return serverMessage;
+    if (status === 413) return 'File is too large.';
+    if (status === 429) return 'Too many uploads. Please wait a moment and try again.';
+    return `Upload failed (${status}).`;
+}
+
+/**
+ * Upload a PDF / DOCX / XLSX / CSV and get back its extracted text plus any
+ * sensitive values found. Refreshes an expired token once, times out after 90 s
+ * and can be cancelled with `signal` (e.g. when the user removes the file).
+ */
+export const uploadDocument = async (file: File, signal?: AbortSignal): Promise<UploadResult> => {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+    const send = async (): Promise<Response> => {
+        await ensureValidToken();
+        const formData = new FormData();
+        formData.append('file', file);
+        return fetch(`${BASE_URL}/odata/uploadDoc`, {
             method:  'POST',
             headers: getAuthHeaders(),
-            body:    formData
+            body:    formData,
+            signal:  controller.signal
         });
-    } catch {
-        throw new Error('Network error during upload.');
-    }
+    };
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status}).`);
-    return data;
+    try {
+        let res = await send();
+        if (res.status === 401) {          // token expired between ensureValidToken() and the request
+            _accessToken = null;
+            res = await send();
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(uploadErrorMessage(res.status, data?.error));
+        return data as UploadResult;
+    } catch (err: unknown) {
+        if (signal?.aborted) throw err;    // caller cancelled — let it handle quietly
+        if (err instanceof DOMException && err.name === 'AbortError') {
+            throw new Error('The upload timed out. Please try again with a smaller file.');
+        }
+        if (err instanceof TypeError) throw new Error('Network error during upload.');
+        throw err;
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+    }
 };
 
 // ── SSE streaming ─────────────────────────────────────────────────────────────
 type StreamStatus  = 'thinking' | 'chunk' | 'done' | 'error';
 type StreamCallback = (status: StreamStatus, content?: string) => void;
 
+// The server sends a heartbeat every 15 s, so 90 s of silence means the stream is dead.
+const STREAM_IDLE_TIMEOUT_MS = 90_000;
+const CONNECTION_LOST_MESSAGE = 'The connection was interrupted before the response finished. Please try again.';
+
+/** POST to a streaming endpoint, refreshing the access token once if it was rejected. */
+async function openStream(path: string, body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
+    const attempt = async () => {
+        await ensureValidToken();
+        return fetch(`${BASE_URL}${path}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body:    JSON.stringify(body),
+            signal
+        });
+    };
+
+    let res = await attempt();
+    if (res.status === 401) {
+        _accessToken = null;               // force a refresh, then retry once
+        res = await attempt();
+        if (res.status === 401) {
+            clearAllAuth();
+            window.location.replace('/login');
+            throw new Error('Session expired. Please log in again.');
+        }
+    }
+    return res;
+}
+
+/**
+ * Reads a server-sent-event stream and reports it through `onUpdate`.
+ * Guarantees the caller gets exactly one terminal event ('done' or 'error') —
+ * including when the request is rejected (401/429/400…), the network drops, or
+ * the server goes silent — so a loading spinner can never get stuck.
+ */
 async function consumeSSE(
     path: string,
     body: Record<string, unknown>,
     onUpdate: StreamCallback
 ): Promise<void> {
-    await ensureValidToken();
+    let finished = false;
+    const emit: StreamCallback = (status, content) => {
+        if (finished) return;
+        if (status === 'done' || status === 'error') finished = true;
+        onUpdate(status, content);
+    };
 
-    let response: Response;
-    try {
-        response = await fetch(`${BASE_URL}${path}`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-            body:    JSON.stringify(body)
-        });
-    } catch {
-        onUpdate('error', 'Network error — could not reach the server.');
-        return;
-    }
-
-    if (response.status === 401) {
-        onUpdate('error', 'Session expired. Please refresh the page.');
-        clearAllAuth();
-        return;
-    }
-
-    if (!response.body) {
-        onUpdate('error', 'Streaming not supported in this browser.');
-        return;
-    }
-
-    const reader  = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer    = '';
+    const controller = new AbortController();
+    let idleTimedOut = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const resetIdleTimer = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { idleTimedOut = true; controller.abort(); }, STREAM_IDLE_TIMEOUT_MS);
+    };
 
     try {
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+        resetIdleTimer();
+        const response = await openStream(path, body, controller.signal);
 
-            buffer += decoder.decode(value, { stream: true });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            emit('error', extractErrorMessage(data, `Request failed (${response.status}).`));
+            return;
+        }
+        if (!response.body) {
+            emit('error', 'Streaming not supported in this browser.');
+            return;
+        }
 
-            // Process complete SSE events (delimited by \n\n)
-            const events = buffer.split('\n\n');
-            buffer = events.pop() ?? '';   // keep incomplete tail in buffer
+        const reader  = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer    = '';
 
-            for (const event of events) {
-                for (const line of event.split('\n')) {
-                    if (line.startsWith(': ')) continue;       // heartbeat comment
-                    if (!line.startsWith('data: ')) continue;
-                    try {
-                        const data = JSON.parse(line.slice(6));
-                        if      (data.status === 'thinking') onUpdate('thinking');
-                        else if (data.status === 'chunk')    onUpdate('chunk', data.content);
-                        else if (data.status === 'done')     onUpdate('done');
-                        else if (data.status === 'error')    onUpdate('error', data.message);
-                    } catch { /* malformed JSON — skip */ }
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                resetIdleTimer();
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Process complete SSE events (delimited by \n\n)
+                const events = buffer.split('\n\n');
+                buffer = events.pop() ?? '';   // keep incomplete tail in buffer
+
+                for (const event of events) {
+                    for (const line of event.split('\n')) {
+                        if (line.startsWith(': ')) continue;       // heartbeat comment
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if      (data.status === 'thinking') emit('thinking');
+                            else if (data.status === 'chunk')    emit('chunk', data.content);
+                            else if (data.status === 'done')     emit('done');
+                            else if (data.status === 'error')    emit('error', data.message);
+                        } catch { /* malformed JSON — skip */ }
+                    }
                 }
             }
+        } finally {
+            reader.releaseLock();
         }
-    } catch (err: any) {
-        onUpdate('error', err.message || 'Stream read error.');
+
+        // The stream closed without a terminal event (proxy timeout, dropped connection…).
+        emit('error', CONNECTION_LOST_MESSAGE);
+    } catch (err: unknown) {
+        const isAbort = err instanceof DOMException && err.name === 'AbortError';
+        if (idleTimedOut) emit('error', 'The server stopped responding. Please try again.');
+        else if (isAbort || err instanceof TypeError) emit('error', CONNECTION_LOST_MESSAGE);
+        else emit('error', (err instanceof Error && err.message) || CONNECTION_LOST_MESSAGE);
     } finally {
-        reader.releaseLock();
+        clearTimeout(idleTimer);
     }
 }
 
