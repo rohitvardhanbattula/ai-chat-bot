@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { ArrowLeft, Star, Copy, Check, Download } from "lucide-react";
+import { ArrowLeft, Star, Copy, Check, Download, FileSpreadsheet } from "lucide-react";
 import { ChatMessage, ModelId, MODELS } from "@/types/chat";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ChatInput from "./ChatInput";
@@ -7,6 +7,8 @@ import RatingPopup from "./RatingPopup";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { checkConnection } from "@/lib/api";
+import { parseMarkdownTables } from "@/lib/markdownTables";
+import { downloadTablesAsExcel } from "@/lib/exportExcel";
 
 // How often to ping the SAP connection (ms)
 const SAP_POLL_INTERVAL_MS = 45_000;
@@ -320,6 +322,15 @@ const ActiveChat = ({
                       <Download className="w-3 h-3" />
                       Save as PDF
                     </button>
+                    {parseMarkdownTables(msg.content).length > 0 && (
+                      <button
+                        onClick={() => downloadTablesAsExcel(msg.content).catch(err => console.error("[Excel export] failed", err))}
+                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      >
+                        <FileSpreadsheet className="w-3 h-3" />
+                        Download as Excel
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div />

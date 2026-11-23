@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
 
 interface MarkdownRendererProps {
@@ -8,6 +9,7 @@ interface MarkdownRendererProps {
 const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
   return (
     <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
       components={{
         code({ className, children, ...props }: any) {
           const match = /language-(\w+)/.exec(className || "");
@@ -43,6 +45,17 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
         ),
         strong: ({ children }: any) => (
           <strong className="text-foreground font-semibold">{children}</strong>
+        ),
+        table: ({ children }: any) => (
+          <div className="overflow-x-auto my-3">
+            <table className="text-xs border-collapse w-full">{children}</table>
+          </div>
+        ),
+        th: ({ children }: any) => (
+          <th className="border border-border px-2 py-1 text-left font-semibold bg-secondary/50">{children}</th>
+        ),
+        td: ({ children }: any) => (
+          <td className="border border-border px-2 py-1 align-top">{children}</td>
         ),
         em: ({ children }: any) => (
           <em className="text-muted-foreground">{children}</em>
